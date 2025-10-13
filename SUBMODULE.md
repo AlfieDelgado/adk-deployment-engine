@@ -8,7 +8,7 @@
 
 ```bash
 # 1. Add sub-module to your project
-git submodule add https://github.com/your-org/adk-deployment-engine.git
+git submodule add https://github.com/AlfieDelgado/adk-deployment-engine.git
 
 # 2. Create your 2-line makefile
 echo "include adk-deployment-engine/makefile" > makefile
@@ -33,7 +33,7 @@ make deploy your-agent
 
 ```bash
 # Add the deployment engine to your project
-git submodule add https://github.com/your-org/adk-deployment-engine.git
+git submodule add https://github.com/AlfieDelgado/adk-deployment-engine.git
 ```
 
 ### 2. Create Your Makefile
@@ -118,7 +118,6 @@ GOOGLE_CLOUD_LOCATION="us-central1"
 
 # API configuration
 GOOGLE_GENAI_USE_VERTEXAI="True"
-# OR
 GOOGLE_API_KEY="your-api-key-here"
 ```
 
@@ -176,7 +175,7 @@ All the same commands from the standalone project work:
 
 ### Agent Management
 ```bash
-make list-agents                    # List your agents
+make list-agents                   # List your agents
 make deploy my-agent               # Deploy specific agent
 make deploy-dry my-agent           # Test deployment (dry run)
 ```

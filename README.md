@@ -48,10 +48,10 @@ Use this deployment engine as a sub-module in your own projects while keeping yo
 
 ```bash
 # 1. Add this repository as a sub-module
-git submodule add https://github.com/your-org/adk-agents.git
+git submodule add https://github.com/AlfieDelgado/adk-deployment-engine.git
 
 # 2. Create your makefile (2 lines)
-echo "include adk-agents/makefile" > makefile
+echo "include adk-deployment-engine/makefile" > makefile
 echo "AGENTS_DIR := agents" >> makefile
 
 # 3. Create your agents directory
@@ -84,7 +84,7 @@ your-project/
 │       └── .env.secrets
 ├── makefile                   # Your 2-line makefile
 ├── .env                       # Your environment variables
-└── adk-agents/                # Sub-module (deployment engine)
+└── adk-deployment-engine/                # Sub-module (deployment engine)
 ```
 
 ### Getting Updates
@@ -119,11 +119,11 @@ git submodule update --remote
 
 ```bash
 # 1. Clone the repository
-git clone <repository-url>
-cd adk-agents
+git clone https://github.com/AlfieDelgado/adk-deployment-engine.git
+cd adk-deployment-engine
 
-# 2. Install Python dependencies
-pip install -r requirements.txt
+# 2. Conda environment and Python dependencies
+conda env create -f environment.yml
 
 # 3. Set up global environment
 cp .env.example .env
@@ -139,7 +139,7 @@ make enable-services
 
 | Priority | Source | Location | Use Case |
 |----------|--------|----------|----------|
-| 1 (Highest) | Google Secret Manager | `config.yaml` flags | Production secrets |
+| 1 (Highest) | Google Secret Manager | `agents/{agent_name}/config.yaml` flags | Production secrets |
 | 2 (Medium) | Agent-specific secrets | `agents/{agent_name}/.env.secrets` | Agent-specific configuration |
 | 3 (Lowest) | Global environment | Project `.env` | Shared defaults |
 
@@ -157,7 +157,7 @@ cloud_run:
 ### Project Structure
 
 ```
-adk-agents/
+adk-deployment-engine/
 ├── main.py                       # FastAPI application entrypoint
 ├── environment.yml               # Conda enviroment
 ├── requirements.txt              # Project dependencies
@@ -168,7 +168,7 @@ adk-agents/
 ├── .dockerignore                 # Build exclusions
 ├── utils/                        # Utility scripts
 │   ├── deploy_agent.py           # Deployment logic
-│   └── agent_engine_manager.py  # Agent Engine creation
+│   └── agent_engine_manager.py   # Agent Engine creation
 └── agents-examples/              # Example agent configurations
     └── {agent_name}/
         ├── config.yaml           # Agent configuration
@@ -248,11 +248,10 @@ cloud_run:
 For agents requiring session management, create a Vertex AI Agent Engine:
 
 ```bash
-# Create Agent Engine (requires AGENT_ENGINE_NAME in .env)
-make create-agent-engine
+# Create Agent Engine (requires AGENT_ENGINE_NAME)
+make create-agent-engine <agent-name>
 
 # Add the returned AGENT_ENGINE_ID to your .env file
-echo "AGENT_ENGINE_ID=your-engine-id-here" >> .env
 ```
 
 **Required Environment Variables**:
