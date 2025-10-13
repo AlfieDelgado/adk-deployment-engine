@@ -1,0 +1,76 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Claude
+.claude/
+
+# Environment files
+env.local
+.env.*.local
+.env
+.env.*
+
+# Secrets (important for security)
+**/.env.secrets
+**/agents/*/.env.secrets
+
+# Documentation
+docs/
+
+# Tests
+test_*.py
+*_test.py
+tests/
+**tests/
+
+# Development files
+.pytest_cache
+htmlcov
+
+# Logs
+logs/
+*.log

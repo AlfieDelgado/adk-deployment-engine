@@ -1,0 +1,9 @@
+name: adk-deployment
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+    - uv
+    - -r requirements.txt

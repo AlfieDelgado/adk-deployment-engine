@@ -1,0 +1,30 @@
+# Base Dockerfile template for ADK Agents
+FROM python:3.13-slim
+
+# Build-time arguments for port configuration
+ARG APP_PORT=8000
+
+WORKDIR /app
+
+# Install system packages if needed
+# SYSTEM_PACKAGES_PLACEHOLDER
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Extra configuration steps
+# EXTRA_STEPS_PLACEHOLDER
+
+RUN adduser --disabled-password --gecos "" myuser && \
+    chown -R myuser:myuser /app
+
+COPY . .
+
+USER myuser
+
+ENV PORT=${APP_PORT}
+ENV PATH="/home/myuser/.local/bin:$PATH"
+
+EXPOSE ${APP_PORT}
+
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
