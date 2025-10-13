@@ -34,7 +34,18 @@ def main():
 
     # Auto-detect service name from agent's config.yaml
     agents_dir = get_agents_dir()
-    config_path = Path(__file__).parent.parent / f"{agents_dir}/{agent_name}/config.yaml"
+
+    # Determine project root using the same logic as other utils
+    current_dir = Path(__file__).parent
+    project_root = current_dir.parent
+
+    # Check if we're running as submodule using DEPLOYMENT_ENGINE_DIR environment variable
+    deployment_engine_dir = os.environ.get('DEPLOYMENT_ENGINE_DIR')
+    if deployment_engine_dir and deployment_engine_dir != '.':
+        # We're running from parent project, go up to main project root
+        project_root = project_root.parent
+
+    config_path = project_root / f"{agents_dir}/{agent_name}/config.yaml"
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)

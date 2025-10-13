@@ -104,8 +104,9 @@ def deploy_agent(agent_name, config, secrets, project_id, region, dry_run=False,
     logging.info(f"🚀 Starting deployment for agent: {agent_name}")
 
     # Validate agent directory exists
-    if not Path(f"agents/{agent_name}").exists():
-        logging.error(f"Agent directory 'agents/{agent_name}' not found")
+    agents_dir = os.environ.get('AGENTS_DIR', 'agents')
+    if not Path(f"{agents_dir}/{agent_name}").exists():
+        logging.error(f"Agent directory '{agents_dir}/{agent_name}' not found")
         return False
 
     # Get Cloud Run configuration

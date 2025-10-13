@@ -6,6 +6,7 @@ build directory creation, and file management.
 
 import fnmatch
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -21,8 +22,14 @@ def modify_dockerfile_template(agent_name, config):
     Returns:
         str: Modified Dockerfile content
     """
-    # Read the template
-    template_path = Path("Dockerfile.template")
+    # Determine the template path - check if we're in a submodule
+    current_dir = Path(__file__).parent
+    template_path = current_dir.parent / "Dockerfile.template"
+
+    # If template not found in submodule parent, try current directory
+    if not template_path.exists():
+        template_path = Path("Dockerfile.template")
+
     if not template_path.exists():
         raise FileNotFoundError(f"Dockerfile.template not found at {template_path}")
 
@@ -73,7 +80,14 @@ def parse_dockerignore():
     Returns:
         list: Ignore patterns from .dockerignore
     """
-    dockerignore_path = Path(".dockerignore")
+    # Determine the .dockerignore path - check if we're in a submodule
+    current_dir = Path(__file__).parent
+    dockerignore_path = current_dir.parent / ".dockerignore"
+
+    # If .dockerignore not found in submodule parent, try current directory
+    if not dockerignore_path.exists():
+        dockerignore_path = Path(".dockerignore")
+
     ignore_patterns = []
 
     if dockerignore_path.exists():
@@ -188,20 +202,33 @@ def create_build_directory(agent_name, config):
     build_dir = Path(tempfile.mkdtemp(prefix=f"adk-build-{agent_name}-"))
     logging.debug(f"Created temporary build directory: {build_dir}")
 
+    # Determine project root for file operations
+    current_dir = Path(__file__).parent
+    project_root = current_dir.parent
+
+    # Check if we're running as submodule using DEPLOYMENT_ENGINE_DIR environment variable
+    deployment_engine_dir = os.environ.get('DEPLOYMENT_ENGINE_DIR')
+    if deployment_engine_dir and deployment_engine_dir != '.':
+        # We're running from parent project, go up to main project root
+        project_root = project_root.parent
+
     # Parse .dockerignore patterns
     ignore_patterns = parse_dockerignore()
     logging.debug(f"Loaded {len(ignore_patterns)} ignore patterns from .dockerignore")
 
     try:
-        # Copy main.py to build directory
-        main_py_path = Path("main.py")
+        # Copy main.py from submodule to build directory
+        main_py_path = current_dir.parent / "main.py"
         if not main_py_path.exists():
-            raise FileNotFoundError("main.py not found in project root")
+            raise FileNotFoundError("main.py not found in adk-deployment-engine")
         shutil.copy(main_py_path, build_dir / "main.py")
         logging.debug("Copied main.py to build directory")
 
+        # Get agents directory from environment variable or default
+        agents_dir = os.environ.get('AGENTS_DIR', 'agents')
+
         # Copy agent requirements.txt as requirements.txt in build directory
-        agent_requirements = Path(f"agents/{agent_name}/requirements.txt")
+        agent_requirements = project_root / f"{agents_dir}/{agent_name}/requirements.txt"
         if agent_requirements.exists():
             shutil.copy(agent_requirements, build_dir / "requirements.txt")
             logging.debug("Copied agent requirements.txt to build directory")
@@ -211,7 +238,7 @@ def create_build_directory(agent_name, config):
             logging.debug("Created empty requirements.txt in build directory")
 
         # Copy entire agent directory to build directory root, respecting .dockerignore
-        agent_source = Path(f"agents/{agent_name}")
+        agent_source = project_root / f"{agents_dir}/{agent_name}"
         if not agent_source.exists():
             raise FileNotFoundError(f"Agent directory not found: {agent_source}")
 

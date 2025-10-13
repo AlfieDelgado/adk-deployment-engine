@@ -51,7 +51,13 @@ def load_environment_files(agent_name=None):
 
     # Determine the project root by going up from utils directory
     current_dir = Path(__file__).parent
-    project_root = current_dir.parent if current_dir.name == "utils" else current_dir
+    project_root = current_dir.parent
+
+    # Check if we're running as submodule using DEPLOYMENT_ENGINE_DIR environment variable
+    deployment_engine_dir = os.environ.get('DEPLOYMENT_ENGINE_DIR')
+    if deployment_engine_dir and deployment_engine_dir != '.':
+        # We're running from parent project, go up to main project root
+        project_root = project_root.parent
 
     # Load multiple .env files in priority order (same as agent.py)
     env_files = [
@@ -60,7 +66,8 @@ def load_environment_files(agent_name=None):
 
     # Add agent-specific .env.secrets if agent_name provided
     if agent_name:
-        env_files.append(project_root / f"agents/{agent_name}/.env.secrets")
+        agents_dir = os.environ.get('AGENTS_DIR', 'agents')
+        env_files.append(project_root / f"{agents_dir}/{agent_name}/.env.secrets")
 
     for env_file in env_files:
         if env_file.exists():

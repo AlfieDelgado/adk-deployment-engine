@@ -9,6 +9,10 @@ ARGS = $(filter-out $@,$(MAKECMDGOALS))
 AGENT = $(word 1,$(ARGS))
 SERVICE = $(word 2,$(ARGS))
 
+# Configurable deployment engine directory (for standalone vs included usage)
+DEPLOYMENT_ENGINE_DIR ?= .
+export DEPLOYMENT_ENGINE_DIR
+
 # Configurable agents directory (default to 'agents' for backward compatibility)
 AGENTS_DIR ?= agents
 export AGENTS_DIR
@@ -71,7 +75,7 @@ enable-services:
 # List available agents
 .PHONY: list-agents
 list-agents:
-	python utils/deploy_agent.py --list
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py --list
 
 # Deploy specific agent (dynamic deployment)
 .PHONY: deploy
@@ -81,34 +85,34 @@ deploy:
 	@echo "📋 Setting up required services..."
 	$(MAKE) enable-services
 	@echo "🚀 Deploying to Cloud Run using official ADK approach..."
-	python utils/deploy_agent.py --deploy $(ARGS)
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py --deploy $(ARGS)
 
 # Dry-run deployment (simulate without actually deploying)
 .PHONY: deploy-dry
 deploy-dry:
 	$(call validate_agent,deploy-dry)
 	@echo "🧪 Simulating deployment for agent: $(ARGS) (dry run)"
-	python utils/deploy_agent.py --deploy $(ARGS) --dry-run
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py --deploy $(ARGS) --dry-run
 
 # Delete Cloud Run service for agent
 .PHONY: delete
 delete:
 	$(call validate_agent,delete)
-	python utils/makefile_helper.py delete $(AGENT)
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/makefile_helper.py delete $(AGENT)
 
 # Test build directory structure
 .PHONY: test-build
 test-build:
 	$(call validate_agent,test-build)
 	@echo "🧪 Testing build directory structure for: $(ARGS)"
-	python utils/deploy_agent.py test build $(ARGS)
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py test build $(ARGS)
 
 # Test Dockerfile generation
 .PHONY: test-dockerfile
 test-dockerfile:
 	$(call validate_agent,test-dockerfile)
 	@echo "🧪 Testing Dockerfile generation for: $(ARGS)"
-	python utils/deploy_agent.py test dockerfile $(ARGS)
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py test dockerfile $(ARGS)
 
 # Agent Engine management (per-agent configuration)
 .PHONY: create-agent-engine
@@ -116,20 +120,20 @@ create-agent-engine:
 	$(call validate_agent,create-agent-engine)
 	@echo "🚀 Creating Vertex AI Agent Engine for agent: $(ARGS)"
 	@echo "📋 Using agent-specific configuration from $(AGENTS_DIR)/$(ARGS)/.env.secrets (if available)..."
-	python utils/agent_engine_manager.py $(ARGS)
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/agent_engine_manager.py $(ARGS)
 
 .PHONY: list-agent-engines
 list-agent-engines:
 	$(call validate_agent,list-agent-engines)
 	@echo "📋 Listing Vertex AI Agent Engines for agent: $(ARGS)"
-	python utils/agent_engine_manager.py $(ARGS) --list
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/agent_engine_manager.py $(ARGS) --list
 
 .PHONY: delete-agent-engine
 delete-agent-engine:
 	$(call validate_agent,delete-agent-engine)
 	@echo "🗑️  Deleting Vertex AI Agent Engine for agent: $(ARGS)"
 	@echo "⚠️  This will permanently delete the agent engine!"
-	python utils/agent_engine_manager.py $(ARGS) --delete
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/agent_engine_manager.py $(ARGS) --delete
 
 # TODO: create gs bucket for artifacts management and ARTIFACT_BUCKET setup
 

@@ -5,6 +5,7 @@ Dockerfile generation, and other deployment components.
 """
 
 import logging
+import os
 import shutil
 
 from pathlib import Path
@@ -130,7 +131,8 @@ def test_dockerfile_generation(agent_name, load_agent_config_func, modify_docker
     print("✅ Dockerfile generated successfully!")
 
     # Save to a test file in agent's folder
-    test_dockerfile = Path(f"agents/{agent_name}/Dockerfile.test")
+    agents_dir = os.environ.get('AGENTS_DIR', 'agents')
+    test_dockerfile = Path(f"{agents_dir}/{agent_name}/Dockerfile.test")
     with open(test_dockerfile, 'w') as f:
         f.write(dockerfile_content)
 
