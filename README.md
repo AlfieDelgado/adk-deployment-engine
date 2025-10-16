@@ -50,9 +50,12 @@ Use this deployment engine as a sub-module in your own projects while keeping yo
 # 1. Add this repository as a sub-module
 git submodule add https://github.com/AlfieDelgado/adk-deployment-engine.git
 
-# 2. Create your makefile (2 lines)
-echo "include adk-deployment-engine/makefile" > makefile
-echo "AGENTS_DIR := agents" >> makefile
+# 2. Create your makefile (single command)
+cat > makefile << 'EOF'
+AGENTS_DIR := agents
+DEPLOYMENT_ENGINE_DIR := adk-deployment-engine
+include adk-deployment-engine/makefile
+EOF
 
 # 3. Create your agents directory
 mkdir agents
@@ -82,9 +85,9 @@ your-project/
 │       ├── agent.py
 │       ├── requirements.txt
 │       └── .env.secrets
-├── makefile                   # Your 2-line makefile
+├── makefile                   # Your makefile with configuration
 ├── .env                       # Your environment variables
-└── adk-deployment-engine/                # Sub-module (deployment engine)
+└── adk-deployment-engine/     # Sub-module (deployment engine)
 ```
 
 ### Getting Updates
