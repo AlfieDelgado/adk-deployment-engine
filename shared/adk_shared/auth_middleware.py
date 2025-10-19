@@ -48,7 +48,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         self.skip_paths = skip_paths or [
             "/list-apps",
             "/debug/",
-            "/favicon.ico"
+            "/favicon.ico",
+            "/docs",
+            "/openapi.json",
+            "/redoc",
+            "/auth/user-info"
         ]
     
     async def dispatch(self, request: Request, call_next: Callable):
@@ -60,8 +64,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             request.state.user_id = user_id
             return await call_next(request)
         
-        # Skip authenticaiton for certain endpoints
-        if any(request.url.path.startswith(path) for path in self.skip_paths):
+        # Skip authentication for certain endpoints
+        if any(request.url.path == path or request.url.path.startswith(path) for path in self.skip_paths):
             return await call_next(request)
         
         # Extract user ID from authentication headers
@@ -69,49 +73,39 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         
         # Store user_id in request state for downstream use
         request.state.user_id = user_id
-        
-        # If this is an endpoint with user_id in the path, we need to reqrite the URL
-        if "/users/" in request.url.path:
-            # Replace the user_id in the path with the authenticated user_id
-            path_parts = request.url.path.split("/")
-            # Find the index of "users" and replace the next element
-            if "users" in path_parts:
-                users_index = path_parts.index("users")
-                if users_index + 1 <len(path_parts):
-                    # Replace the path user_id with authenticated user_id
-                    original_user_id = path_parts[users_index + 1]
-                    path_parts[users_index + 1] = user_id
 
-                    # Create new URL with the correct user_id
-                    new_path = "/".join(path_parts)
-                    if request.url.query:
-                        new_path += f"?{request.url.query}"
+        # Log the authenticated user ID for debugging
+        logger.info(f"Authentication middleware set user_id: {user_id} for path: {request.url.path}")
+        logger.info(f"Request state user_id: {getattr(request.state, 'user_id', 'NOT_SET')}")
 
-                    # Log the user ID substitution for debugging
-                    if original_user_id != user_id:
-                        logger.info(
-                            f"Replaced path user_id '{original_user_id}' with authenticated user_id '{user_id}'"
-                        )
-
-                    # Create a new request with the modified path
-                    scope = dict(request.scope)
-                    scope["path"] = "/".join(path_parts)
-                    if request.url.query:
-                        scope["query_string"] = request.url.query.encode()
-
-                    request = Request(scope)
+        # Note: ADK's get_fast_api_app() doesn't automatically read request.state.user_id
+        # The user_id needs to be passed to ADK through its native session creation mechanism
 
         response = await call_next(request)
         return response
 
     def _extract_user_id_from_headers(self, request: Request) -> str:
         """Extract user ID from various authentication methods."""
-        
+
+        # Log all headers for debugging
+        logger.info(f"=== Authentication Debug for path: {request.url.path} ===")
+        for header_name, header_value in request.headers.items():
+            # Mask authorization headers for security
+            if header_name.lower() in ['authorization', 'x-goog-identity-token']:
+                masked_value = header_value[:20] + "..." if len(header_value) > 20 else header_value
+                logger.info(f"Header: {header_name} = {masked_value}")
+            else:
+                logger.info(f"Header: {header_name} = {header_value}")
+        logger.info("=== End Headers ===")
+
         # Priority 1: IAM authentication (production)
         authorization = request.headers.get("authorization", "")
+        logger.info(f"Authorization header found: {bool(authorization)}")
         if authorization.startswith("Bearer "):
             token = authorization[7:]
+            logger.info(f"Token length: {len(token)}")
             claims = decode_google_iam_token(token)
+            logger.info(f"Decoded claims: {claims}")
 
             if claims:
                 user_id = (
@@ -141,5 +135,5 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return x_user_id
 
         # Priority 4: Development fallback
-        logger.warning("No authentication headers found, using development_user")
-        return "development_user"
+        logger.warning("No authentication headers found, using 'developer'")
+        return "developer"
