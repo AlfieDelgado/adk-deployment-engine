@@ -12,9 +12,11 @@ from google.adk.cli.fast_api import get_fast_api_app
 try:
     # Standalone import
     from shared.adk_shared.auth_middleware import AuthenticationMiddleware
+    from shared.adk_shared.adk_integration import ADKUserContextMiddleware
 except ImportError:
     # Submodule import
     from adk_shared.auth_middleware import AuthenticationMiddleware
+    from adk_shared.adk_integration import ADKUserContextMiddleware
 
 # Get the directory where main.py is located
 AGENT_DIR = Path(__file__).parent
@@ -49,24 +51,31 @@ app: FastAPI = get_fast_api_app(
 # Add authentication middleware to handle user ID extraction automatically
 app.add_middleware(AuthenticationMiddleware)
 
+# Add ADK user context middleware to inject authenticated user IDs into ADK endpoints
+app.add_middleware(ADKUserContextMiddleware)
+
 # Add a simple endpoint for debugging authentication
 @app.get("/auth/user-info")
 async def get_user_info(request: Request):
     """
     Get information abbout the authenticated user.
-    
+
     Useful for debugging authentication setup
     """
     # Import here to avoid circular imports
-    from shared.adk_shared.auth_middleware import decode_google_iam_token
-    
-    user_id = getattr(request.state, "user_id", "development_user")
-    
+    try:
+        from shared.adk_shared.auth_middleware import decode_google_iam_token
+    except ImportError:
+        from adk_shared.auth_middleware import decode_google_iam_token
+
+
+    user_id = getattr(request.state, "user_id", "developer")
+
     # Get authentication headers for debugging
     authorization = request.headers.get("authorization", "")
     x_goog_authenticated_user_email = request.headers.get("x-goog-authenticated-user-email", "")
     x_user_id = request.headers.get("x-user-id", "")
-    
+
     # Determine authentication source for debugging
     auth_source = "development"
     if authorization.startswith("Bearer "):
@@ -95,6 +104,74 @@ async def get_user_info(request: Request):
         "custom_user_id": x_user_id,
         "iam_claims": iam_info
     }
+
+
+# Add endpoint to test ADK user context injection
+@app.get("/auth/test-adk-context")
+async def test_adk_context(request: Request):
+    """
+    Test endpoint to verify ADK user context injection is working.
+
+    This endpoint simulates how ADK would receive the authenticated user ID.
+    """
+    user_id = getattr(request.state, "user_id", "developer")
+
+    # Check if the ADK user context middleware has injected the user ID
+    headers = dict(request.headers)
+    adk_user_id_header = headers.get("x-adk-user-id")
+
+    # Check if path was modified for ADK
+    path_was_modified = "user" not in request.url.path and user_id != "developer"
+
+    return {
+        "request_state_user_id": user_id,
+        "adk_user_id_header": adk_user_id_header,
+        "path_was_modified": path_was_modified,
+        "current_path": request.url.path,
+        "authentication_successful": user_id != "developer"
+    }
+
+
+# Add endpoint to test manual IAM token injection
+@app.get("/auth/test-manual-token")
+async def test_manual_token(request: Request):
+    """
+    Test endpoint to verify manual IAM token injection works.
+
+    Use this to test if our JWT decoding works with manual tokens.
+    """
+    # Import here to avoid circular imports
+    try:
+        from shared.adk_shared.auth_middleware import decode_google_iam_token
+    except ImportError:
+        from adk_shared.auth_middleware import decode_google_iam_token
+
+    # Get authorization header
+    authorization = request.headers.get("authorization", "")
+
+    result = {
+        "has_authorization_header": bool(authorization),
+        "authorization_starts_with_bearer": authorization.startswith("Bearer "),
+        "authorization_length": len(authorization) if authorization else 0
+    }
+
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+        claims = decode_google_iam_token(token)
+
+        result.update({
+            "token_length": len(token),
+            "claims": claims,
+            "decoded_successfully": bool(claims),
+            "user_id_from_claims": (
+                claims.get("sub") or
+                claims.get("email", "").split("@")[0] or
+                claims.get("name") or
+                claims.get("user_id")
+            ) if claims else None
+        })
+
+    return result
 
 if __name__ == "__main__":
     # Use the PORT environment variable provided by Cloud Run, defaulting to 8080
