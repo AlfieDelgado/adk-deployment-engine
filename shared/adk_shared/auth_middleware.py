@@ -40,7 +40,7 @@ def decode_google_iam_token(token: str) -> dict:
         return {}
 
 
-class AuthenticationMiddleware(BaseException):
+class AuthenticationMiddleware(BaseHTTPMiddleware):
     """Middleware to automatically extract user ID from authentication headers."""
     
     def __init__(self, app, skip_paths: list[str] = None):
@@ -79,7 +79,7 @@ class AuthenticationMiddleware(BaseException):
                 users_index = path_parts.index("users")
                 if users_index + 1 <len(path_parts):
                     # Replace the path user_id with authenticated user_id
-                    original_user_id = path_parts(users_index + 1)
+                    original_user_id = path_parts[users_index + 1]
                     path_parts[users_index + 1] = user_id
 
                     # Create new URL with the correct user_id

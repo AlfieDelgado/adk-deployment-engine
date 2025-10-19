@@ -1,2 +1,2 @@
 google-adk>=1.16.0
-jwt>=1.4.0
+PyJWT>=2.10.1

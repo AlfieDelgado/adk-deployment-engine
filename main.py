@@ -9,7 +9,12 @@ from fastapi import FastAPI, Request
 from google.adk.cli.fast_api import get_fast_api_app
 
 # Import the authentication middleware
-from shared.adk_shared.auth_middleware import AuthenticationMiddleware
+try:
+    # Standalone import
+    from shared.adk_shared.auth_middleware import AuthenticationMiddleware
+except ImportError:
+    # Submodule import
+    from adk_shared.auth_middleware import AuthenticationMiddleware
 
 # Get the directory where main.py is located
 AGENT_DIR = Path(__file__).parent
