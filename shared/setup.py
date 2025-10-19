@@ -5,7 +5,7 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
-        "python-dotenv",
+        "python-dotenv>=1.1.1",
     ],
     python_requires=">=3.13",
     description="Shared utilities for ADK agents deployment",
