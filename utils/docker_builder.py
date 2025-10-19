@@ -54,7 +54,7 @@ def modify_dockerfile_template(agent_name, config):
                 packages_block += f"\n        {pkg} \\"
             else:
                 packages_block += f"\n        {pkg} &&"
-        packages_block += "\n    rm -rf /var/lib/apt/lists/*"
+        packages_block += "\n    && rm -rf /var/lib/apt/lists/*"
         replacements["# SYSTEM_PACKAGES_PLACEHOLDER"] = packages_block
     else:
         replacements["# SYSTEM_PACKAGES_PLACEHOLDER"] = ""
