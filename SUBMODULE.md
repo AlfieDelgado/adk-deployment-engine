@@ -2,112 +2,57 @@
 
 > **🎯 Purpose**: Quick start guide for using ADK Agents as a sub-module in your projects while keeping your agents completely private.
 >
-> **📚 Complete Reference**: See [README.md](README.md) for the full project documentation and advanced configuration options.
+> **📚 Complete Reference**: See [README.md](README.md) for full documentation and advanced configuration options.
 
 ## ⚡ 5-Minute Setup
 
 ```bash
-# 1. Add sub-module to your project
+# 1. Add ADK deployment engine as a sub-module
 git submodule add https://github.com/AlfieDelgado/adk-deployment-engine.git
 
-# 2. Create your 2-line makefile
-echo "include adk-deployment-engine/makefile" > makefile
-echo "AGENTS_DIR := agents" >> makefile
+# 2. Create your project makefile (single command)
+cat > makefile << 'EOF'
+AGENTS_DIR := agents
+DEPLOYMENT_ENGINE_DIR := adk-deployment-engine
+include adk-deployment-engine/makefile
+EOF
 
-# 3. Set up environment
+# 3. Set up your project environment
 cp adk-deployment-engine/.env.example .env
-# Edit .env with your Google Cloud settings
+# Edit .env with your Google Cloud project settings
 mkdir agents
 
-# 4. Start deploying!
+# 4. Create your first agent (see below)
+
+# 5. Deploy your agent!
 make deploy your-agent
 ```
+> **🎯 That's it!** You now have a complete ADK deployment system using the sub-module. See sections below for agent creation and shared utilities.
 
-> **💡 New to sub-modules?** See the detailed setup instructions below.
-
----
-
-## 🚀 Detailed Setup
-
-### 1. Add Sub-module
-
-```bash
-# Add the deployment engine to your project
-git submodule add https://github.com/AlfieDelgado/adk-deployment-engine.git
-```
-
-### 2. Create Your Makefile
-
-```bash
-# Create a simple 2-line makefile
-echo "include adk-deployment-engine/makefile" > makefile
-echo "AGENTS_DIR := agents" >> makefile
-```
-
-### 3. Set Up Environment
-
-```bash
-# Create your environment file
-cp adk-deployment-engine/.env.example .env
-# Edit .env with your Google Cloud settings
-
-# Create your agents directory
-mkdir agents
-```
-
-That's it! You can now use all the same make commands.
-
-## 🎯 Most Common Commands
-
-```bash
-# Daily workflow
-make list-agents                    # See your agents
-make deploy your-agent               # Deploy your agent
-make delete your-agent               # Delete deployment
-
-# Testing & validation
-make deploy-dry your-agent           # Test deployment (no actual deploy)
-make test-build your-agent           # Test build structure
-make test-dockerfile your-agent      # Test Dockerfile generation
-
-# Agent Engine (for session management)
-make create-agent-engine your-agent  # Create Vertex AI Agent Engine
-make list-agent-engines your-agent   # List your agent engines
-```
-
-> **📚 Complete command reference**: See [README.md - Deployment Commands](README.md#deployment-commands) for all available commands and options.
-
-## 📁 Project Structure
-
-Your project will look like this:
+## 📁 Your Project Structure
 
 ```
-your-project/
+your-project/                         # Your main project (private)
 ├── agents/                           # Your private agents (never shared)
 │   └── my-secret-agent/
 │       ├── config.yaml               # Your agent configuration
 │       ├── agent.py                  # Your agent code
-│       ├── requirements.txt          # Your dependencies
+│       ├── requirements.txt          # Your dependencies (include adk-shared)
 │       └── .env.secrets              # Your secrets (never committed)
-├── makefile                          # Your 2-line makefile
+├── makefile                          # Your 3-line makefile
 ├── .env                              # Your environment variables
-└── adk-deployment-engine/            # Sub-module
-    ├── makefile                      # Deployment engine makefile
-    ├── utils/                        # All deployment utilities
+└── adk-deployment-engine/            # Sub-module (deployment engine only)
+    ├── shared/                       # Shared utilities package
     └── agents-examples/              # Example agents (for reference)
 ```
 
-## 🔧 Configuration
-
-### Makefile (2 lines)
+### Makefile Configuration
 
 ```makefile
-include adk-deployment-engine/makefile
 AGENTS_DIR := agents
+DEPLOYMENT_ENGINE_DIR := adk-deployment-engine
+include adk-deployment-engine/makefile
 ```
-
-- `include adk-deployment-engine/makefile`: Imports all deployment commands
-- `AGENTS_DIR := agents`: Tells the engine where your agents are located
 
 ### Environment Variables (.env)
 
@@ -123,13 +68,11 @@ GOOGLE_API_KEY="your-api-key-here"
 
 ## 🤖 Creating Your First Agent
 
-### Quick Agent Setup
-
 ```bash
-# 1. Create agent directory
+# Create agent directory
 mkdir agents/my-agent
 
-# 2. Create basic configuration
+# Create basic configuration
 cat > agents/my-agent/config.yaml << EOF
 description: My first agent
 tags: [my-agent, production]
@@ -145,102 +88,81 @@ cloud_run:
     - --timeout=300s
 EOF
 
-# 3. Create basic agent code
-cat > agents/my-agent/agent.py << EOF
-#!/usr/bin/env python3
-"""My first ADK Agent."""
-
-def main():
-    print("Agent ready for deployment!")
-
-if __name__ == "__main__":
-    main()
+# Create requirements.txt with shared utilities
+cat > agents/my-agent/requirements.txt << EOF
+google-adk
+adk-shared @ git+https://github.com/AlfieDelgado/adk-deployment-engine.git@main#subdirectory=shared
 EOF
 
-# 4. Add secrets (optional)
+# Create agent code with shared utilities
+cat > agents/my-agent/agent.py << EOF
+from google.adk.agents import LlmAgent
+from adk_shared.helpers import load_env_vars
+
+# Load environment variables automatically
+load_env_vars()
+
+my_agent = LlmAgent(
+    model="gemini-2.5-flash-lite",
+    instruction="You are a helpful assistant.",
+    name="MyAgent",
+)
+EOF
+
+# Add secrets (optional)
 cat > agents/my-agent/.env.secrets << EOF
 SERVICE_ACCOUNT="my-agent-sa@project.iam.gserviceaccount.com"
 SECRET_NAME="my-agent-api-key"
 EOF
 
-# 5. Deploy!
+# Deploy!
 make deploy my-agent
 ```
 
-> **📚 Detailed examples**: See [README.md - Configuration Examples](README.md#configuration-examples) for production-ready configurations and advanced setups.
+## 📦 Shared Utilities
 
-## 📋 Available Commands
+The deployment engine includes a shared utilities package (`adk-shared`) for common functionality across agents.
 
-All the same commands from the standalone project work:
+### Key Features
 
-### Agent Management
+- ✅ **Git-based Installation**: No local submodule management required
+- ✅ **Version Control**: Pin to specific commits for reproducible builds
+- ✅ **Clean Imports**: Standard Python package imports
+- ✅ **Environment Management**: Automatic loading of `.env` files with priority
+- ✅ **Production Ready**: Works in both development and Docker deployments
+
+> **📚 Complete reference**: See [README.md - Shared Utilities Package](README.md#shared-utilities-package) for detailed documentation.
+
+## 🚀 Common Commands
+
 ```bash
-make list-agents                   # List your agents
-make deploy my-agent               # Deploy specific agent
+# Daily workflow
+make list-agents                    # See your agents
+make deploy my-agent               # Deploy your agent
+make delete my-agent               # Delete deployment
+
+# Testing & validation
 make deploy-dry my-agent           # Test deployment (dry run)
-```
-
-### Agent Engine Management
-```bash
-make create-agent-engine my-agent  # Create Vertex AI Agent Engine
-make list-agent-engines my-agent   # List agent engines
-make delete-agent-engine my-agent  # Delete agent engine
-```
-
-### Service Management
-```bash
-make delete my-agent                # Delete Cloud Run service
-```
-
-### Testing
-```bash
 make test-build my-agent           # Test build structure
 make test-dockerfile my-agent      # Test Dockerfile generation
-```
 
-### Project Setup
-```bash
+# Agent Engine (session management)
+make create-agent-engine my-agent  # Create Vertex AI Agent Engine
+make list-agent-engines my-agent   # List your agent engines
+
+# Project setup
 make enable-services               # Enable required Google Cloud APIs
 ```
 
-## 🔄 Getting Updates
-
-When the deployment engine is improved, you can easily get the latest changes:
+## 🔄 Updates & Maintenance
 
 ```bash
-# Update to the latest version
-git submodule update --remote
+# Get latest deployment engine improvements
+git submodule update --remote --merge
 
-# Or pull latest and update
+# Update to latest and sync
 git pull origin main
 git submodule update --init --recursive
-```
-
-## 🤝 Contributing
-
-Want to contribute improvements to the deployment engine?
-
-### Option 1: Simple Issues
-- Open GitHub Issues for bug reports or feature requests
-- The maintainers will implement improvements
-
-### Option 2: Code Contributions
-1. Fork the adk-deployment-engine repository
-2. Make your changes
-3. Submit a Pull Request
-
-### Option 3: Local Development
-```bash
-# In your sub-module directory
-cd adk-deployment-engine
-
-# Add your fork as a remote
-git remote add my-fork https://github.com/your-username/adk-deployment-engine.git
-
-# Make changes and push to your fork
-git push my-fork my-feature
-
-# Create PR on GitHub
 ```
 
 ## 🎯 Best Practices
@@ -252,92 +174,41 @@ git push my-fork my-feature
 - ✅ Follow principle of least privilege
 
 ### Development
-- ✅ Start with the example agents in `adk-deployment-engine/agents-examples/`
 - ✅ Use `make deploy-dry` to test before deploying
-- ✅ Keep your `agents/` directory in `.gitignore`
+- ✅ Keep `agents/` directory in `.gitignore`
 - ✅ Use descriptive service names
-
-### Configuration
-- ✅ Keep configuration in `config.yaml`, not code
-- ✅ Use environment variables for changeable values
-- ✅ Set appropriate resource limits
-- ✅ Test with different configurations
 
 ## 🔍 Troubleshooting
 
-### Common Issues
-
 | Problem | Solution |
 |---------|----------|
-| **"No agents found"** | Check your `AGENTS_DIR` setting and ensure `config.yaml` exists |
-| **Environment variable errors** | Verify your `.env` file has required variables |
+| **"No agents found"** | Check `AGENTS_DIR` setting and `config.yaml` exists |
+| **Environment variable errors** | Verify `.env` file has required variables |
 | **Permission errors** | Check service account permissions and IAM roles |
-| **Deployment timeouts** | Increase `--timeout` in your `config.yaml` |
-
-### Debug Commands
+| **Deployment timeouts** | Increase `--timeout` in `config.yaml` |
 
 ```bash
-# Verbose deployment
-make deploy my-agent --verbose
-
-# Test specific agent
+# Debug commands
+python adk-deployment-engine/utils/deploy_agent.py --deploy my-agent --verbose
 make test-build my-agent
 make test-dockerfile my-agent
-
-# Check environment
-cat .env
 ```
 
 ## 📚 Advanced Usage
 
 ### Custom Agents Directory
 
-Want to use a different name for your agents directory?
-
 ```makefile
-include adk-deployment-engine/makefile
 AGENTS_DIR := my-custom-agents
-```
-
-### Multiple Environments
-
-Create different makefiles for different environments:
-
-`makefile.staging`:
-```makefile
+DEPLOYMENT_ENGINE_DIR := adk-deployment-engine
 include adk-deployment-engine/makefile
-AGENTS_DIR := staging-agents
 ```
 
-`makefile.production`:
-```makefile
-include adk-deployment-engine/makefile
-AGENTS_DIR := production-agents
-```
+## 🤝 Contributing
 
-Use them like:
-```bash
-make -f makefile.staging deploy my-agent
-make -f makefile.production deploy my-agent
-```
-
-## 🎯 Where to Go Next
-
-### Just Starting? 🌱
-- Review [README.md - Core Concepts](README.md#core-concepts) to understand how it works
-- Check [README.md - Configuration Examples](README.md#configuration-examples) for more agent templates
-- Read [README.md - Best Practices](README.md#best-practices) for security tips
-
-### Ready for Production? 🚀
-- Set up Secret Manager for production secrets
-- Configure different environments (staging/production)
-- Implement proper IAM roles and service accounts
-- Add monitoring and logging
-
-### Need Help? 🤝
-- [README.md - Troubleshooting](README.md#troubleshooting) for common issues
-- Open GitHub Issues for bugs or feature requests
-- Check the example agents in `adk-deployment-engine/agents-examples/`
+- **Issues**: Open GitHub Issues for bugs/feature requests
+- **Code**: Fork repository, make changes, submit Pull Request
+- **Examples**: See `adk-deployment-engine/agents-examples/` for reference
 
 ---
 
@@ -346,6 +217,7 @@ make -f makefile.production deploy my-agent
 You now have:
 - ✅ Private agent implementations
 - ✅ Professional deployment engine
+- ✅ Shared utilities package
 - ✅ Automatic updates and improvements
 - ✅ Same simple interface as standalone
 - ✅ Full control over your code
