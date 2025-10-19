@@ -7,7 +7,7 @@ setup(
     install_requires=[
         "python-dotenv>=1.1.1",
         "PyJWT>=2.10.1",
-        "fastapi>=0.119.0",
+        "fastapi>=0.118.3",  # workaround issues with Swagger
         "starlette>=0.48.0",
     ],
     python_requires=">=3.13",
