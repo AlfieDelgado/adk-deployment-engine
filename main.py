@@ -7,7 +7,7 @@ from google.adk.cli.fast_api import get_fast_api_app
 import uvicorn
 
 # Get the directory where main.py is located
-AGENT_DIR = Path(__file__).parent
+AGENTS_DIR = Path(__file__).parent
 # Session service uri
 if os.getenv("AGENT_ENGINE_ID"):
     SESSION_SERVICE_URI = (
@@ -27,7 +27,7 @@ SERVE_WEB_INTERFACE = True
 # Call the function to get the FastAPI app instance
 # Ensure the agent directory name ('capital_agent') matches your agent folder
 app: FastAPI = get_fast_api_app(
-    agents_dir=str(AGENT_DIR),
+    agents_dir=str(AGENTS_DIR),
     session_service_uri=SESSION_SERVICE_URI,
     artifact_service_uri=f"gs://{ARTIFACT_BUCKET}" if ARTIFACT_BUCKET else None,
     allow_origins=ALLOWED_ORIGINS,

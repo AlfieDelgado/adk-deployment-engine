@@ -142,3 +142,5 @@ delete-agent-engine:
 # TODO: create service account for SERVICE_ACCOUNT
 
 # TODO: add arguments for dynamic cloud run service name, including dev, prod, stg, etc.
+
+# TODO: create sub conda envs by agent
