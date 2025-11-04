@@ -217,13 +217,6 @@ def create_build_directory(agent_name, config):
     logging.debug(f"Loaded {len(ignore_patterns)} ignore patterns from .dockerignore")
 
     try:
-        # Copy main.py from submodule to build directory
-        main_py_path = current_dir.parent / "main.py"
-        if not main_py_path.exists():
-            raise FileNotFoundError("main.py not found in adk-deployment-engine")
-        shutil.copy(main_py_path, build_dir / "main.py")
-        logging.debug("Copied main.py to build directory")
-
         # Get agents directory from environment variable or default
         agents_dir = os.environ.get('AGENTS_DIR', 'agents')
 
@@ -242,11 +235,36 @@ def create_build_directory(agent_name, config):
         if not agent_source.exists():
             raise FileNotFoundError(f"Agent directory not found: {agent_source}")
 
+        # Check if agent has custom app structure (app/main.py exists)
+        app_main_path = agent_source / "app" / "main.py"
+
+        if app_main_path.exists():
+            # CUSTOM APP: Keep app/ inside agent directory, only promote main.py
+            logging.info(f"📦 Detected custom app for {agent_name}")
+
+            # Add ignore patterns for custom app structure
+            ignore_patterns.extend(["__pycache__", "admin", "supabase_schema.sql"])
+            logging.debug(f"Added ignore patterns: __pycache__, admin, supabase_schema.sql")
+
+            # Promote main.py from app/ to build root
+            shutil.copy(app_main_path, build_dir / "main.py")
+            logging.info(f"✅ Promoted {agent_name}/app/main.py to build root")
+        else:
+            # SIMPLE AGENT: Use template main.py
+            logging.info(f"🎯 Detected simple agent for {agent_name}")
+            main_py_path = current_dir.parent / "main.py"
+            if not main_py_path.exists():
+                raise FileNotFoundError("main.py not found in adk-deployment-engine")
+            shutil.copy(main_py_path, build_dir / "main.py")
+            logging.info(f"✅ Copied template main.py for simple agent")
+
+        # Copy entire agent directory
         agent_dest = build_dir / agent_name
         agent_dest.mkdir(exist_ok=True)
         copy_directory_with_ignore(agent_source, agent_dest, ignore_patterns, is_agent_dir=True)
-        logging.debug(f"Copied agent {agent_name} to build directory root (respecting .dockerignore)")
+        logging.info(f"✅ Copied {agent_name} to build directory")
 
+        logging.debug(f"Build directory created successfully: {build_dir}")
         return build_dir
 
     except Exception as e:
