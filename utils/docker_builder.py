@@ -235,10 +235,10 @@ def create_build_directory(agent_name, config):
         if not agent_source.exists():
             raise FileNotFoundError(f"Agent directory not found: {agent_source}")
 
-        # Check if agent has custom app structure (app/main.py exists)
-        app_main_path = agent_source / "app" / "main.py"
+        # Check if agent has custom app structure (main.py exists in agent root)
+        main_py_path = agent_source / "main.py"
 
-        if app_main_path.exists():
+        if main_py_path.exists():
             # CUSTOM APP: Keep app/ inside agent directory, only promote main.py
             logging.info(f"📦 Detected custom app for {agent_name}")
 
@@ -246,9 +246,9 @@ def create_build_directory(agent_name, config):
             ignore_patterns.extend(["__pycache__", "admin", "supabase_schema.sql"])
             logging.debug(f"Added ignore patterns: __pycache__, admin, supabase_schema.sql")
 
-            # Promote main.py from app/ to build root
-            shutil.copy(app_main_path, build_dir / "main.py")
-            logging.info(f"✅ Promoted {agent_name}/app/main.py to build root")
+            # Promote main.py from agent root to build root
+            shutil.copy(main_py_path, build_dir / "main.py")
+            logging.info(f"✅ Promoted {agent_name}/main.py to build root")
         else:
             # SIMPLE AGENT: Use template main.py
             logging.info(f"🎯 Detected simple agent for {agent_name}")
