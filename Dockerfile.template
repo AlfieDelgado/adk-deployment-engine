@@ -15,10 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Extra configuration steps
 # EXTRA_STEPS_PLACEHOLDER
 
+COPY . .
+
 RUN adduser --disabled-password --gecos "" myuser && \
     chown -R myuser:myuser /app
-
-COPY . .
 
 USER myuser
 
