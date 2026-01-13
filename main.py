@@ -1,4 +1,5 @@
 import os
+import logging
 
 from pathlib import Path
 
@@ -6,17 +7,24 @@ from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 import uvicorn
 
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
 # Get the directory where main.py is located
 AGENTS_DIR = Path(__file__).parent
 # Session service uri
-if os.getenv("AGENT_ENGINE_ID"):
+if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true":
     SESSION_SERVICE_URI = (
         f"agentengine://projects/{os.getenv('GOOGLE_CLOUD_PROJECT', '')}"
         f"/locations/{os.getenv('GOOGLE_CLOUD_LOCATION', '')}"
         f"/reasoningEngines/{os.getenv('AGENT_ENGINE_ID', '')}"
     )
+    logging.info(f"Using Vertex AI Agent Engine for sessions: {os.getenv('AGENT_ENGINE_ID')}")
 else:
     SESSION_SERVICE_URI = "sqlite:///./sessions.db"
+    if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() != "true":
+        logging.warning("AGENT_ENGINE_ID is set but GOOGLE_GENAI_USE_VERTEXAI=false")
+        logging.warning("Using SQLite sessions (ephemeral on Cloud Run).")
+        logging.warning("Set GOOGLE_GENAI_USE_VERTEXAI=true to use Vertex AI Agent Engine for persistent sessions.")
 # Persistent artifacts GS bucket
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET")
 # Allowed origins for CORS
