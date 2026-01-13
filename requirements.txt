@@ -1,2 +1,2 @@
-google-adk>=1.16.0
+google-adk>=1.22.1
 setuptools>=80.9.0
