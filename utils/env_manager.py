@@ -219,9 +219,29 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
     additional_flags = cloud_run_config.get("additional_flags", [])
     secret_manager_secrets, referenced_vars, secret_manager_env_vars, additional_processed_flags = process_secret_manager_config(additional_flags)
 
-    # Log Secret Manager secrets
+    # Check API configuration and enforce mutual exclusivity (ADK 1.22.1+)
+    use_vertexai = (env_vars.get("GOOGLE_GENAI_USE_VERTEXAI") or get_env_var("GOOGLE_GENAI_USE_VERTEXAI", "false")).lower() == "true"
+
+    # Track which variables should be excluded based on auth mode
+    excluded_by_auth_mode = set()
+
+    if use_vertexai:
+        # Vertex AI mode: GOOGLE_API_KEY must NOT be deployed
+        excluded_by_auth_mode.add("GOOGLE_API_KEY")
+        logging.info("✅ Vertex AI mode: GOOGLE_API_KEY will be excluded from deployment")
+    else:
+        # Gemini Developer API mode: Only GOOGLE_API_KEY needed
+        # (GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION kept for session service)
+        logging.info("✅ Gemini Developer API mode: Using GOOGLE_API_KEY")
+
+    # Filter Secret Manager secrets based on auth mode
+    filtered_secrets = []
     for secret_name, env_var_name in secret_manager_secrets:
-        logging.info(f"🔐 Secret Manager: {env_var_name} will be loaded from secret '{secret_name}'")
+        if env_var_name in excluded_by_auth_mode:
+            logging.info(f"⏭️  Skipping Secret Manager secret: {env_var_name} (excluded by auth mode)")
+        else:
+            logging.info(f"🔐 Secret Manager: {env_var_name} will be loaded from secret '{secret_name}'")
+            filtered_secrets.append((secret_name, env_var_name))
 
     # Build environment variable list with essential variables
     base_env_vars = [
@@ -230,13 +250,15 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
     ]
 
     # Define excluded variables (handled elsewhere)
-    global_env_vars = ["GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_API_KEY"]
+    # Add GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION to prevent duplicates from .env files
+    global_env_vars = ["GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"]
     excluded_vars = secret_manager_env_vars | substituted_vars | secret_referenced_vars | set(referenced_vars)
     has_api_key = False
 
     # Load global environment variables (excluding handled variables)
+    # Skip GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION as they're already set above
     for env_var in global_env_vars:
-        if env_var not in excluded_vars:
+        if env_var not in excluded_vars and env_var not in excluded_by_auth_mode and env_var not in ["GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"]:
             value = env_vars.get(env_var) or get_env_var(env_var)
             if value:
                 base_env_vars.append(f"{env_var}={value}")
@@ -245,7 +267,7 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
 
     # Load agent secrets (excluding handled variables)
     for key, value in env_vars.items():
-        if key not in excluded_vars and key not in global_env_vars:
+        if key not in excluded_vars and key not in global_env_vars and key not in excluded_by_auth_mode:
             stripped_value = strip_quotes(value)
             base_env_vars.append(f"{key}={stripped_value}")
             if key == "GOOGLE_API_KEY":
@@ -253,9 +275,7 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
 
     env_string = ",".join(base_env_vars)
 
-    # Check API configuration
-    use_vertexai = (env_vars.get("GOOGLE_GENAI_USE_VERTEXAI") or get_env_var("GOOGLE_GENAI_USE_VERTEXAI", "false")).lower() == "true"
-
+    # Log API configuration status
     logging.info("🤖 API Configuration:")
     if use_vertexai:
         logging.info(f"✅ Using Vertex AI (project: {project_id}, region: {region})")
@@ -270,6 +290,6 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
         logging.info(f"  - Or add GOOGLE_API_KEY to agents/{agent_name}/.env.secrets")
         logging.info("  - Or configure Secret Manager in config.yaml")
 
-    logging.debug(f"Environment variables: {len(base_env_vars)}, Secrets loaded: {len(env_vars)}, Secret Manager secrets: {len(secret_manager_secrets)}, Additional flags: {len(additional_processed_flags)}")
+    logging.debug(f"Environment variables: {len(base_env_vars)}, Secrets loaded: {len(env_vars)}, Secret Manager secrets: {len(filtered_secrets)}, Additional flags: {len(additional_processed_flags)}")
 
-    return env_string, secret_manager_secrets, additional_processed_flags
+    return env_string, filtered_secrets, additional_processed_flags
