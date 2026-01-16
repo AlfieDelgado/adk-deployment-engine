@@ -194,9 +194,9 @@ def handle_deployment(args):
 
     # Get and validate environment variables
     project_id = get_env_var("GOOGLE_CLOUD_PROJECT")
-    region = get_env_var("GOOGLE_CLOUD_LOCATION")
+    region = get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or get_env_var("GOOGLE_CLOUD_LOCATION")
     if not project_id or not region:
-        logging.error("GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set in .env file")
+        logging.error("GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION (or GOOGLE_CLOUD_LOCATION_DEPLOY) must be set in .env file")
         sys.exit(1)
 
     # Deploy using cloud_deployer module

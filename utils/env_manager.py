@@ -246,19 +246,20 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
     # Build environment variable list with essential variables
     base_env_vars = [
         f"GOOGLE_CLOUD_PROJECT={stripped_project_id}",
-        f"GOOGLE_CLOUD_LOCATION={stripped_region}"
+        f"GOOGLE_CLOUD_LOCATION={stripped_region}",
+        f"GOOGLE_CLOUD_LOCATION_DEPLOY={stripped_region}"
     ]
 
     # Define excluded variables (handled elsewhere)
-    # Add GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION to prevent duplicates from .env files
-    global_env_vars = ["GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"]
+    # Add GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, and GOOGLE_CLOUD_LOCATION_DEPLOY to prevent duplicates from .env files
+    global_env_vars = ["GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION", "GOOGLE_CLOUD_LOCATION_DEPLOY"]
     excluded_vars = secret_manager_env_vars | substituted_vars | secret_referenced_vars | set(referenced_vars)
     has_api_key = False
 
     # Load global environment variables (excluding handled variables)
-    # Skip GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION as they're already set above
+    # Skip GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, and GOOGLE_CLOUD_LOCATION_DEPLOY as they're already set above
     for env_var in global_env_vars:
-        if env_var not in excluded_vars and env_var not in excluded_by_auth_mode and env_var not in ["GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"]:
+        if env_var not in excluded_vars and env_var not in excluded_by_auth_mode and env_var not in ["GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION", "GOOGLE_CLOUD_LOCATION_DEPLOY"]:
             value = env_vars.get(env_var) or get_env_var(env_var)
             if value:
                 base_env_vars.append(f"{env_var}={value}")

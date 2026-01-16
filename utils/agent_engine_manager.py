@@ -153,7 +153,8 @@ def create_agent_engine(agent_name: Optional[str] = None) -> str:
 
     # Get required environment variables with fallback
     project_id = env_vars.get("GOOGLE_CLOUD_PROJECT") or get_env_var("GOOGLE_CLOUD_PROJECT")
-    location = env_vars.get("GOOGLE_CLOUD_LOCATION") or get_env_var("GOOGLE_CLOUD_LOCATION")
+    location = (env_vars.get("GOOGLE_CLOUD_LOCATION_DEPLOY") or env_vars.get("GOOGLE_CLOUD_LOCATION") or
+                get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or get_env_var("GOOGLE_CLOUD_LOCATION"))
     agent_engine_name = env_vars.get("AGENT_ENGINE_NAME") or get_env_var("AGENT_ENGINE_NAME")
 
     if not all({project_id, location, agent_engine_name}):
@@ -162,7 +163,7 @@ def create_agent_engine(agent_name: Optional[str] = None) -> str:
         if not project_id:
             missing.append("GOOGLE_CLOUD_PROJECT")
         if not location:
-            missing.append("GOOGLE_CLOUD_LOCATION")
+            missing.append("GOOGLE_CLOUD_LOCATION or GOOGLE_CLOUD_LOCATION_DEPLOY")
         if not agent_engine_name:
             missing.append("AGENT_ENGINE_NAME")
         print(f"\t{', '.join(missing)}")
@@ -240,10 +241,11 @@ def main():
     # Load environment variables for project/region
     env_vars = load_environment_files(args.agent_name)
     project_id = env_vars.get("GOOGLE_CLOUD_PROJECT") or get_env_var("GOOGLE_CLOUD_PROJECT")
-    location = env_vars.get("GOOGLE_CLOUD_LOCATION") or get_env_var("GOOGLE_CLOUD_LOCATION")
+    location = (env_vars.get("GOOGLE_CLOUD_LOCATION_DEPLOY") or env_vars.get("GOOGLE_CLOUD_LOCATION") or
+                get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or get_env_var("GOOGLE_CLOUD_LOCATION"))
 
     if not project_id or not location:
-        print("Error: Missing GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_LOCATION in environment variables")
+        print("Error: Missing GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_LOCATION/GOOGLE_CLOUD_LOCATION_DEPLOY in environment variables")
         sys.exit(1)
 
     # Route to appropriate handler based on command

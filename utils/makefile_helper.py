@@ -66,7 +66,7 @@ def main():
 
     # Get required environment variables
     project = env.get('GOOGLE_CLOUD_PROJECT')
-    region = env.get('GOOGLE_CLOUD_LOCATION') or env.get('GOOGLE_CLOUD_REGION')
+    region = env.get('GOOGLE_CLOUD_LOCATION_DEPLOY') or env.get('GOOGLE_CLOUD_LOCATION')
 
     print('📋 Loading environment configuration...')
 
@@ -77,7 +77,7 @@ def main():
 
     # Handle region
     if not region:
-        print('⚠️  Warning: GOOGLE_CLOUD_LOCATION not found, using us-central1')
+        print('⚠️  Warning: GOOGLE_CLOUD_LOCATION_DEPLOY or GOOGLE_CLOUD_LOCATION not found, using us-central1')
         region = 'us-central1'
     else:
         print(f'✅ Using region: {region}')

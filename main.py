@@ -11,14 +11,16 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Get the directory where main.py is located
 AGENTS_DIR = Path(__file__).parent
-# Session service uri
+# Session service uri (use GOOGLE_CLOUD_LOCATION_DEPLOY for GCP resource location)
 if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true":
+    deploy_location = os.getenv("GOOGLE_CLOUD_LOCATION_DEPLOY") or os.getenv("GOOGLE_CLOUD_LOCATION", "")
     SESSION_SERVICE_URI = (
         f"agentengine://projects/{os.getenv('GOOGLE_CLOUD_PROJECT', '')}"
-        f"/locations/{os.getenv('GOOGLE_CLOUD_LOCATION', '')}"
+        f"/locations/{deploy_location}"
         f"/reasoningEngines/{os.getenv('AGENT_ENGINE_ID', '')}"
     )
     logging.info(f"Using Vertex AI Agent Engine for sessions: {os.getenv('AGENT_ENGINE_ID')}")
+    logging.info(f"Agent Engine location: {deploy_location}")
 else:
     SESSION_SERVICE_URI = "sqlite:///./sessions.db"
     if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() != "true":
