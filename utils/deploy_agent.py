@@ -194,13 +194,16 @@ def handle_deployment(args):
 
     # Get and validate environment variables
     project_id = get_env_var("GOOGLE_CLOUD_PROJECT")
-    region = get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or get_env_var("GOOGLE_CLOUD_LOCATION")
-    if not project_id or not region:
-        logging.error("GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION (or GOOGLE_CLOUD_LOCATION_DEPLOY) must be set in .env file")
+    location = get_env_var("GOOGLE_CLOUD_LOCATION")
+    location_deploy = get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or location
+
+    if not project_id or not location:
+        agents_dir = get_agents_dir()
+        logging.error(f"GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set in .env file or {agents_dir}/{args.deploy}/.env.secrets")
         sys.exit(1)
 
     # Deploy using cloud_deployer module
-    success = deploy_agent(args.deploy, config, secrets, project_id, region, dry_run=args.dry_run,
+    success = deploy_agent(args.deploy, config, secrets, project_id, location_deploy, dry_run=args.dry_run,
                          substituted_vars=substituted_vars, secret_referenced_vars=secret_referenced_vars)
     if not success:
         sys.exit(1)

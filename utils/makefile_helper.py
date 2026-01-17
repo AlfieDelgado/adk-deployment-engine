@@ -66,21 +66,21 @@ def main():
 
     # Get required environment variables
     project = env.get('GOOGLE_CLOUD_PROJECT')
-    region = env.get('GOOGLE_CLOUD_LOCATION_DEPLOY') or env.get('GOOGLE_CLOUD_LOCATION')
+    location = env.get('GOOGLE_CLOUD_LOCATION')
+    region = env.get('GOOGLE_CLOUD_LOCATION_DEPLOY') or location
 
     print('📋 Loading environment configuration...')
 
-    # Validate project
+    # Validate project and location
     if not project:
         print(f'❌ Error: GOOGLE_CLOUD_PROJECT not found in .env or {agents_dir}/{agent_name}/.env.secrets')
         sys.exit(1)
 
-    # Handle region
-    if not region:
-        print('⚠️  Warning: GOOGLE_CLOUD_LOCATION_DEPLOY or GOOGLE_CLOUD_LOCATION not found, using us-central1')
-        region = 'us-central1'
-    else:
-        print(f'✅ Using region: {region}')
+    if not location:
+        print(f'❌ Error: GOOGLE_CLOUD_LOCATION not found in .env or {agents_dir}/{agent_name}/.env.secrets')
+        sys.exit(1)
+
+    print(f'✅ Using deployment region: {region}')
 
     print(f'🔧 Using agent-specific configuration from {agents_dir}/{agent_name}/.env.secrets')
     print(f'🗑️  Deleting Cloud Run service: {service_name}...')

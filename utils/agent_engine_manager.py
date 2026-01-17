@@ -151,10 +151,10 @@ def create_agent_engine(agent_name: Optional[str] = None) -> str:
     # Load environment variables using modular approach
     env_vars = load_environment_files(agent_name)
 
-    # Get required environment variables with fallback
+    # Get required environment variables
     project_id = env_vars.get("GOOGLE_CLOUD_PROJECT") or get_env_var("GOOGLE_CLOUD_PROJECT")
-    location = (env_vars.get("GOOGLE_CLOUD_LOCATION_DEPLOY") or env_vars.get("GOOGLE_CLOUD_LOCATION") or
-                get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or get_env_var("GOOGLE_CLOUD_LOCATION"))
+    location = env_vars.get("GOOGLE_CLOUD_LOCATION") or get_env_var("GOOGLE_CLOUD_LOCATION")
+    location_deploy = env_vars.get("GOOGLE_CLOUD_LOCATION_DEPLOY") or location
     agent_engine_name = env_vars.get("AGENT_ENGINE_NAME") or get_env_var("AGENT_ENGINE_NAME")
 
     if not all({project_id, location, agent_engine_name}):
@@ -163,7 +163,7 @@ def create_agent_engine(agent_name: Optional[str] = None) -> str:
         if not project_id:
             missing.append("GOOGLE_CLOUD_PROJECT")
         if not location:
-            missing.append("GOOGLE_CLOUD_LOCATION or GOOGLE_CLOUD_LOCATION_DEPLOY")
+            missing.append("GOOGLE_CLOUD_LOCATION")
         if not agent_engine_name:
             missing.append("AGENT_ENGINE_NAME")
         print(f"\t{', '.join(missing)}")
@@ -183,7 +183,7 @@ def create_agent_engine(agent_name: Optional[str] = None) -> str:
         print("🔧 Using global configuration from .env")
 
     # Check if agent engine already exists
-    existing_engine_id = check_existing_agent_engine(project_id, location, agent_engine_name)
+    existing_engine_id = check_existing_agent_engine(project_id, location_deploy, agent_engine_name)
 
     if existing_engine_id:
         print(f"\n✅ Using existing agent engine with ID: {existing_engine_id}")
@@ -194,7 +194,7 @@ def create_agent_engine(agent_name: Optional[str] = None) -> str:
 
     try:
         # Initialize Vertex AI
-        vertexai.init(project=project_id, location=location)
+        vertexai.init(project=project_id, location=location_deploy)
 
         # Create an empty Agent Engine instance (no code deployment)
         # This only takes a few seconds and gives you session management capabilities
@@ -241,23 +241,23 @@ def main():
     # Load environment variables for project/region
     env_vars = load_environment_files(args.agent_name)
     project_id = env_vars.get("GOOGLE_CLOUD_PROJECT") or get_env_var("GOOGLE_CLOUD_PROJECT")
-    location = (env_vars.get("GOOGLE_CLOUD_LOCATION_DEPLOY") or env_vars.get("GOOGLE_CLOUD_LOCATION") or
-                get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or get_env_var("GOOGLE_CLOUD_LOCATION"))
+    location = env_vars.get("GOOGLE_CLOUD_LOCATION") or get_env_var("GOOGLE_CLOUD_LOCATION")
+    location_deploy = env_vars.get("GOOGLE_CLOUD_LOCATION_DEPLOY") or location
 
     if not project_id or not location:
-        print("Error: Missing GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_LOCATION/GOOGLE_CLOUD_LOCATION_DEPLOY in environment variables")
+        print("Error: Missing GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_LOCATION in environment variables")
         sys.exit(1)
 
     # Route to appropriate handler based on command
     if args.list:
         agent_engine_name = env_vars.get("AGENT_ENGINE_NAME") or get_env_var("AGENT_ENGINE_NAME")
-        list_agent_engines(project_id, location, agent_engine_name)
+        list_agent_engines(project_id, location_deploy, agent_engine_name)
     elif args.delete:
         agent_engine_name = env_vars.get("AGENT_ENGINE_NAME") or get_env_var("AGENT_ENGINE_NAME")
         if not agent_engine_name:
             print("Error: AGENT_ENGINE_NAME not found in environment variables")
             sys.exit(1)
-        success = delete_agent_engine(project_id, location, agent_engine_name, args.force)
+        success = delete_agent_engine(project_id, location_deploy, agent_engine_name, args.force)
         sys.exit(0 if success else 1)
     else:
         # Default: create agent engine
