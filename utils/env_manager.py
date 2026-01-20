@@ -139,6 +139,10 @@ def substitute_env_vars(config, agent_name=None):
 def process_secret_manager_config(additional_flags):
     """Process Secret Manager configurations from additional flags.
 
+    Note: This parses --update-secrets= from config.yaml. The deployer uses
+    --clear-secrets first, then --set-secrets to ensure all old secrets are
+    cleared on re-deployment. Use --update-secrets= in your config.yaml.
+
     Args:
         additional_flags: List of additional Cloud Run flags
 

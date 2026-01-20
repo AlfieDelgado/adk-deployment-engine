@@ -35,21 +35,22 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         "--source", ".",
         "--region", region,
         "--project", project_id,
-        "--set-env-vars", env_string
     ]
+
+    # Clear/set secrets (ensures old secrets are removed on re-deployment)
+    if secret_manager_secrets:
+        secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
+                                   for secret_name, env_var_name in secret_manager_secrets])
+        deploy_cmd.append(f"--set-secrets={secret_values}")
+    else:
+        deploy_cmd.append("--clear-secrets")
 
     # Add additional processed flags (memory, cpu, timeout, service-account, etc.)
     if additional_processed_flags:
         deploy_cmd.extend(additional_processed_flags)
 
-    # Process Secret Manager secrets
-    secret_flags = []
-    for secret_name, env_var_name in secret_manager_secrets:
-        secret_flags.append(f"--update-secrets={env_var_name}={secret_name}:latest")
-
-    # Add Secret Manager flags to deploy command
-    if secret_flags:
-        deploy_cmd.extend(secret_flags)
+    # Add env vars (already clears all existing env vars before setting new ones)
+    deploy_cmd.extend(["--set-env-vars", env_string])
 
     logging.debug(f"Running command: {' '.join(deploy_cmd)}")
 
@@ -60,18 +61,23 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         formatted_cmd = f"gcloud run deploy {service_name} \\"
         formatted_cmd += "\n    --source . \\"
         formatted_cmd += f"\n    --region {region} \\"
-        formatted_cmd += f"\n    --project {project_id} \\"
-        formatted_cmd += f"\n    --set-env-vars '{env_string}'"
+        formatted_cmd += f"\n    --project {project_id}"
+
+        # Show secret flags
+        if secret_manager_secrets:
+            secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
+                                       for secret_name, env_var_name in secret_manager_secrets])
+            formatted_cmd += f" \\\n    --set-secrets={secret_values}"
+        else:
+            formatted_cmd += f" \\\n    --clear-secrets"
 
         # Show additional flags
         if additional_processed_flags:
             for flag in additional_processed_flags:
                 formatted_cmd += f" \\\n    {flag}"
 
-        # Show secret flags
-        if secret_flags:
-            for flag in secret_flags:
-                formatted_cmd += f" \\\n    {flag}"
+        # Show env vars
+        formatted_cmd += f" \\\n    --set-env-vars '{env_string}'"
 
         logging.info(formatted_cmd)
         logging.info("✅ Dry run complete - no actual deployment performed")
