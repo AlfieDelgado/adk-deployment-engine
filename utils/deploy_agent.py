@@ -184,6 +184,26 @@ def handle_deployment(args):
     Args:
         args: Parsed command line arguments
     """
+    # Validate mutually exclusive environment flags
+    if args.dev and args.stag:
+        logging.error("❌ Cannot specify both --dev and --stag flags")
+        sys.exit(1)
+
+    # Determine environment and prefix from flags
+    if args.dev:
+        environment = "dev"
+        service_prefix = "dev-"
+    elif args.stag:
+        environment = "stag"
+        service_prefix = "stag-"
+    else:
+        environment = "prod"
+        service_prefix = ""
+
+    # Log environment info
+    if environment != "prod":
+        logging.info(f"🌍 Environment: {environment} (service prefix: '{service_prefix}')")
+
     # Load and validate configuration
     result = load_agent_config(args.deploy)
     if not result:
@@ -192,18 +212,48 @@ def handle_deployment(args):
     config, substituted_vars, secret_referenced_vars = result
     secrets = load_agent_secrets(args.deploy)
 
-    # Get and validate environment variables
-    project_id = get_env_var("GOOGLE_CLOUD_PROJECT")
-    location = get_env_var("GOOGLE_CLOUD_LOCATION")
-    location_deploy = get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY") or location
+    # Get deployment configuration from config.yaml (for CI/CD fallback)
+    cloud_run_config = config.get("cloud_run", {})
+    config_project = cloud_run_config.get("gcp_project")
+    config_location = cloud_run_config.get("gcp_location")
 
-    if not project_id or not location:
+    # Get environment variables (source of truth for local development)
+    env_project = get_env_var("GOOGLE_CLOUD_PROJECT")
+    env_location_deploy = get_env_var("GOOGLE_CLOUD_LOCATION_DEPLOY")
+    env_location_api = get_env_var("GOOGLE_CLOUD_LOCATION")
+
+    # Use env var as source of truth, fall back to config
+    project_id = env_project or config_project
+    location_deploy = env_location_deploy or env_location_api or config_location
+
+    # Warn if there's a mismatch between env var and config
+    if env_project and config_project and env_project != config_project:
+        logging.warning(f"⚠️  GOOGLE_CLOUD_PROJECT mismatch:")
+        logging.warning(f"   .env has '{env_project}', config.yaml has '{config_project}'")
+        logging.warning(f"   Using: '{env_project}' (env var takes precedence)")
+
+    if (env_location_deploy or env_location_api) and config_location:
+        env_location = env_location_deploy or env_location_api
+        if env_location != config_location:
+            logging.warning(f"⚠️  GOOGLE_CLOUD_LOCATION mismatch:")
+            logging.warning(f"   .env has '{env_location}', config.yaml has '{config_location}'")
+            logging.warning(f"   Using: '{env_location}' (env var takes precedence)")
+
+    # Validate required values
+    if not project_id:
         agents_dir = get_agents_dir()
-        logging.error(f"GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set in .env file or {agents_dir}/{args.deploy}/.env.secrets")
+        logging.error(f"GOOGLE_CLOUD_PROJECT must be set in .env file, {agents_dir}/{args.deploy}/.env.secrets, or config.yaml")
+        sys.exit(1)
+
+    if not location_deploy:
+        agents_dir = get_agents_dir()
+        logging.error(f"GOOGLE_CLOUD_LOCATION must be set in .env file, {agents_dir}/{args.deploy}/.env.secrets, or config.yaml")
         sys.exit(1)
 
     # Deploy using cloud_deployer module
-    success = deploy_agent(args.deploy, config, secrets, project_id, location_deploy, dry_run=args.dry_run,
+    success = deploy_agent(args.deploy, config, secrets, project_id, location_deploy,
+                         dry_run=args.dry_run, preserve_env=args.preserve_env,
+                         service_prefix=service_prefix, environment=environment,
                          substituted_vars=substituted_vars, secret_referenced_vars=secret_referenced_vars)
     if not success:
         sys.exit(1)
@@ -219,6 +269,12 @@ def create_argument_parser():
     parser.add_argument("--deploy", help="Deploy specific agent")
     parser.add_argument("--list", action="store_true", help="List available agents")
     parser.add_argument("--dry-run", action="store_true", help="Simulate deployment without actually deploying")
+    parser.add_argument("--preserve-env", action="store_true",
+                        help="Preserve existing environment variables and secrets (use --update-env-vars and --update-secrets)")
+    parser.add_argument("--dev", action="store_true",
+                        help="Deploy to dev environment (adds 'dev-' prefix to service name)")
+    parser.add_argument("--stag", action="store_true",
+                        help="Deploy to staging environment (adds 'stag-' prefix to service name)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     # Test subcommands

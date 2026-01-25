@@ -12,7 +12,7 @@ from pathlib import Path
 
 def execute_cloud_run_deployment(service_name, region, project_id, env_string,
                                 secret_manager_secrets, additional_processed_flags,
-                                dry_run=False):
+                                dry_run=False, preserve_env=False):
     """Execute the actual Cloud Run deployment with Secret Manager support.
 
     Args:
@@ -23,6 +23,8 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         secret_manager_secrets: List of (secret_name, env_var_name) tuples
         additional_processed_flags: Additional Cloud Run flags
         dry_run: Whether to perform a dry run (simulation)
+        preserve_env: If True, use --update-env-vars/--update-secrets to preserve
+                     existing environment variables and secrets that aren't being updated
 
     Returns:
         None
@@ -37,20 +39,33 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         "--project", project_id,
     ]
 
-    # Clear/set secrets (ensures old secrets are removed on re-deployment)
-    if secret_manager_secrets:
-        secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
-                                   for secret_name, env_var_name in secret_manager_secrets])
-        deploy_cmd.append(f"--set-secrets={secret_values}")
+    # Handle secrets
+    if preserve_env:
+        # In preserve mode, skip secrets entirely (for CI/CD)
+        logging.info("🔧 Preserve mode: Skipping secrets (keeping existing Cloud Run secrets)")
     else:
+        # In full deployment mode, clear all secrets first, then set configured ones
         deploy_cmd.append("--clear-secrets")
+        logging.info("🧹 Full deployment: Clearing all existing secrets first")
+
+        if secret_manager_secrets:
+            secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
+                                       for secret_name, env_var_name in secret_manager_secrets])
+            deploy_cmd.append(f"--set-secrets={secret_values}")
+            logging.info(f"🔄 Full deployment: Setting {len(secret_manager_secrets)} secret(s)")
+        else:
+            logging.info("ℹ️  Full deployment: No secrets configured (secrets cleared and not replaced)")
 
     # Add additional processed flags (memory, cpu, timeout, service-account, etc.)
     if additional_processed_flags:
         deploy_cmd.extend(additional_processed_flags)
 
-    # Add env vars (already clears all existing env vars before setting new ones)
-    deploy_cmd.extend(["--set-env-vars", env_string])
+    # Handle env vars - only set if NOT in preserve mode
+    if preserve_env:
+        logging.info("🔧 Preserve mode: Skipping environment variables (keeping existing Cloud Run env vars)")
+    else:
+        deploy_cmd.extend(["--set-env-vars", env_string])
+        logging.info("🔄 Full deployment: Using --set-env-vars (replaces all environment variables)")
 
     logging.debug(f"Running command: {' '.join(deploy_cmd)}")
 
@@ -64,20 +79,22 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         formatted_cmd += f"\n    --project {project_id}"
 
         # Show secret flags
-        if secret_manager_secrets:
-            secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
-                                       for secret_name, env_var_name in secret_manager_secrets])
-            formatted_cmd += f" \\\n    --set-secrets={secret_values}"
-        else:
+        if not preserve_env:
+            # Full deployment mode - always clear first, then set if configured
             formatted_cmd += f" \\\n    --clear-secrets"
+            if secret_manager_secrets:
+                secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
+                                           for secret_name, env_var_name in secret_manager_secrets])
+                formatted_cmd += f" \\\n    --set-secrets={secret_values}"
 
         # Show additional flags
         if additional_processed_flags:
             for flag in additional_processed_flags:
                 formatted_cmd += f" \\\n    {flag}"
 
-        # Show env vars
-        formatted_cmd += f" \\\n    --set-env-vars '{env_string}'"
+        # Show env vars (only if NOT in preserve mode)
+        if not preserve_env:
+            formatted_cmd += f" \\\n    --set-env-vars '{env_string}'"
 
         logging.info(formatted_cmd)
         logging.info("✅ Dry run complete - no actual deployment performed")
@@ -90,6 +107,7 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
 
 
 def deploy_agent(agent_name, config, secrets, project_id, region, dry_run=False,
+                 preserve_env=False, service_prefix=None, environment=None,
                  substituted_vars=None, secret_referenced_vars=None):
     """Deploy a specific agent using official ADK approach with dynamic Cloud Run configuration.
 
@@ -100,6 +118,12 @@ def deploy_agent(agent_name, config, secrets, project_id, region, dry_run=False,
         project_id: Google Cloud project ID
         region: Google Cloud region
         dry_run: Whether to perform a dry run
+        preserve_env: If True, use --update-env-vars instead of --set-env-vars to
+                     preserve existing environment variables and secrets
+        service_prefix: Service name prefix (e.g., "dev-", "stag-", or "")
+        environment: Environment name (dev, stag, or prod)
+        substituted_vars: Set of variables that were substituted
+        secret_referenced_vars: Set of variables referenced in secrets
 
     Returns:
         bool: True if deployment successful, False otherwise
@@ -117,7 +141,11 @@ def deploy_agent(agent_name, config, secrets, project_id, region, dry_run=False,
 
     # Get Cloud Run configuration
     cloud_run_config = config.get("cloud_run", {})
-    service_name = cloud_run_config.get("service_name", f"{agent_name}-service")
+    base_service_name = cloud_run_config.get("service_name", f"{agent_name}-service")
+
+    # Apply service prefix from CLI flags (or empty string for production)
+    prefix = service_prefix if service_prefix is not None else ""
+    service_name = f"{prefix}{base_service_name}"
 
     # Setup environment variables
     env_string, secret_manager_secrets, additional_processed_flags = setup_environment_variables(
@@ -127,6 +155,8 @@ def deploy_agent(agent_name, config, secrets, project_id, region, dry_run=False,
 
     # Log deployment info
     logging.info(f"Service: {service_name}")
+    if prefix and base_service_name != service_name:
+        logging.info(f"  (base service name: {base_service_name}, prefix: '{prefix}')")
     logging.info(f"Project: {project_id}")
     logging.info(f"Region: {region}")
     logging.info(f"Description: {config.get('description', 'No description')}")
@@ -148,7 +178,7 @@ def deploy_agent(agent_name, config, secrets, project_id, region, dry_run=False,
         # Execute deployment
         execute_cloud_run_deployment(
             service_name, region, project_id, env_string,
-            secret_manager_secrets, additional_processed_flags, dry_run
+            secret_manager_secrets, additional_processed_flags, dry_run, preserve_env
         )
         return True
 
