@@ -1,0 +1,134 @@
+name: Detect Agent Changes
+
+on:
+  workflow_call:
+    inputs:
+      agents-dir:
+        description: 'Directory containing agent configurations (if not provided, reads from Makefile AGENTS_DIR or defaults to agents)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      agents-to-deploy:
+        description: 'JSON array of agent names that changed'
+        value: ${{ jobs.detect-changes.outputs.agents-to-deploy }}
+      should-deploy-all:
+        description: 'True if all agents should deploy (global changes detected)'
+        value: ${{ jobs.detect-changes.outputs.should-deploy-all }}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      agents-to-deploy: ${{ steps.changes.outputs.agents-to-deploy }}
+      should-deploy-all: ${{ steps.changes.outputs.should-deploy-all }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect AGENTS_DIR from Makefile
+        id: detect-agents-dir
+        run: |
+          # Use provided agents-dir, or read from Makefile, or default to 'agents'
+          if [ -n "${{ inputs.agents-dir }}" ]; then
+            echo "agents-dir=${{ inputs.agents-dir }}" >> $GITHUB_OUTPUT
+            echo "📁 Using provided agents-dir: ${{ inputs.agents-dir }}"
+          elif [ -f "Makefile" ]; then
+            # Read AGENTS_DIR from Makefile (handles both ?= and = assignments)
+            MAKEFILE_AGENTS_DIR=$(grep -E '^AGENTS_DIR[[:space:]]*\\?=' Makefile | sed 's/^AGENTS_DIR[[:space:]]*[?:]=*[[:space:]]*//' | tr -d ' ')
+            if [ -n "$MAKEFILE_AGENTS_DIR" ]; then
+              echo "agents-dir=$MAKEFILE_AGENTS_DIR" >> $GITHUB_OUTPUT
+              echo "📁 Read AGENTS_DIR from Makefile: $MAKEFILE_AGENTS_DIR"
+            else
+              echo "agents-dir=agents" >> $GITHUB_OUTPUT
+              echo "📁 AGENTS_DIR not in Makefile, using default: agents"
+            fi
+          else
+            echo "agents-dir=agents" >> $GITHUB_OUTPUT
+            echo "📁 No Makefile found, using default: agents"
+          fi
+
+      - name: Detect changes
+        id: changes
+        run: |
+          # Set agents directory from detected value
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+
+          # Find all agents (directories containing config.yaml)
+          echo "🔍 Scanning ${AGENTS_DIR}/ for agents..."
+          AGENTS=()
+          for agent_dir in "${AGENTS_DIR}"/*/; do
+            if [ -f "${agent_dir}config.yaml" ]; then
+              agent_name=$(basename "${agent_dir}")
+              AGENTS+=("${agent_name}")
+              echo "  ✓ Found agent: ${agent_name}"
+            fi
+          done
+
+          # Get changed files since last commit
+          echo "📋 Detecting changed files..."
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+
+          # Global files that trigger full deployment
+          GLOBAL_FILES=(
+            ".env"
+            "requirements.txt"
+            "environment.yml"
+            "makefile"
+            "pyproject.toml"
+            ".python-version"
+          )
+
+          # Check for global file changes
+          SHOULD_DEPLOY_ALL="false"
+          for file in $CHANGED_FILES; do
+            for global_file in "${GLOBAL_FILES[@]}"; do
+              if [[ "$file" == "$global_file" ]]; then
+                echo "  ⚠️  Global file changed: $file"
+                SHOULD_DEPLOY_ALL="true"
+              fi
+            done
+
+            # Check for changes in utils/ directory (deployment engine changes)
+            if [[ "$file" == utils/* ]]; then
+              echo "  ⚠️  Deployment engine file changed: $file"
+              SHOULD_DEPLOY_ALL="true"
+            fi
+
+            # Check for changes in .github/workflows/ directory
+            if [[ "$file" == .github/workflows/* ]]; then
+              echo "  ⚠️  Workflow file changed: $file"
+              SHOULD_DEPLOY_ALL="true"
+            fi
+          done
+
+          # Check each agent for changes
+          CHANGED_AGENTS=()
+          for agent in "${AGENTS[@]}"; do
+            agent_prefix="${AGENTS_DIR}/${agent}/"
+
+            for file in $CHANGED_FILES; do
+              if [[ "$file" == ${agent_prefix}* ]]; then
+                echo "  ✓ Agent changed: ${agent}"
+                CHANGED_AGENTS+=("${agent}")
+                break
+              fi
+            done
+          done
+
+          # Output results
+          if [ "$SHOULD_DEPLOY_ALL" = "true" ]; then
+            echo "🔄 Global changes detected - deploying all agents"
+            echo "agents-to-deploy=$(printf '%s\n' "${AGENTS[@]}" | jq -R . | jq -s -c .)" >> $GITHUB_OUTPUT
+            echo "should-deploy-all=true" >> $GITHUB_OUTPUT
+          elif [ ${#CHANGED_AGENTS[@]} -gt 0 ]; then
+            echo "🔄 Agent changes detected - deploying: ${CHANGED_AGENTS[*]}"
+            echo "agents-to-deploy=$(printf '%s\n' "${CHANGED_AGENTS[@]}" | jq -R . | jq -s -c .)" >> $GITHUB_OUTPUT
+            echo "should-deploy-all=false" >> $GITHUB_OUTPUT
+          else
+            echo "ℹ️  No agent changes detected"
+            echo "agents-to-deploy=[]" >> $GITHUB_OUTPUT
+            echo "should-deploy-all=false" >> $GITHUB_OUTPUT
+          fi

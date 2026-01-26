@@ -1,0 +1,56 @@
+name: CI/CD
+
+# NOTE: This workflow demonstrates how to use the reusable GitHub Actions workflows.
+#
+# === FOR THIS REPO (adk-deployment-engine) ===
+# - This is the actual CI/CD workflow for testing agents-examples
+# - DISABLED by default (requires ENABLE_CI_CD repository variable)
+# - To enable: Settings → Secrets and variables → Actions → Variables → New repository variable
+#   Name: ENABLE_CI_CD
+#   Value: true
+#
+# === FOR SUBMODULE USERS ===
+# - Use this as an EXAMPLE for your own ci-cd.yml
+# - Copy this file to your repo: .github/workflows/ci-cd.yml
+# - REMOVE or COMMENT the 'if: vars.ENABLE_CI_CD == 'true'' condition below
+# - Customize workflow references and agents-dir as needed
+#
+# When using as a submodule:
+#   1. Change workflow references from './.github/workflows/' to 'YOUR_ORG/adk-deployment-engine/.github/workflows/@main'
+#   2. Update 'agents-dir: agents-examples' to match your AGENTS_DIR (or omit to auto-detect from Makefile)
+#   3. Ensure GCP_SA_KEY secret exists in your repository
+#
+# See SUBMODULE.md "Setting Up GitHub Actions" section for complete instructions.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [dev, stag, main]
+  push:
+    branches: [dev, stag, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  detect:
+    # Submodule users: Remove this condition to enable the workflow in your repo
+    if: vars.ENABLE_CI_CD == 'true'
+    uses: ./.github/workflows/detect-changes.yml
+    with:
+      agents-dir: 'agents-examples'
+
+  deploy:
+    needs: detect
+    # Only run on merge or direct push
+    if: |
+      vars.ENABLE_CI_CD == 'true' &&
+      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true))
+    uses: ./.github/workflows/deploy.yml
+    with:
+      agents-dir: 'agents-examples'
+      agents-to-deploy: ${{ needs.detect.outputs.agents-to-deploy }}
+      branch-name: ${{ github.ref_name }}
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}

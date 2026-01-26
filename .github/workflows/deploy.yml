@@ -1,0 +1,164 @@
+name: Deploy Agents to Cloud Run
+
+on:
+  workflow_call:
+    inputs:
+      agents-dir:
+        description: 'Directory containing agent configurations (if not provided, reads from Makefile AGENTS_DIR or defaults to agents)'
+        required: false
+        type: string
+        default: ''
+      agents-to-deploy:
+        description: 'JSON array of agent names to deploy'
+        required: true
+        type: string
+      preserve-env:
+        description: 'Skip --set-env-vars and --set-secrets (use for CI/CD where .env files are gitignored)'
+        required: false
+        type: boolean
+        default: true
+      branch-name:
+        description: 'Name of branch being deployed (dev, stag, or main)'
+        required: true
+        type: string
+    secrets:
+      GCP_SA_KEY:
+        description: 'Google Cloud service account key (JSON format)'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent: ${{ fromJson(inputs.agents-to-deploy) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Detect AGENTS_DIR from Makefile
+        id: detect-agents-dir
+        run: |
+          # Use provided agents-dir, or read from Makefile, or default to 'agents'
+          if [ -n "${{ inputs.agents-dir }}" ]; then
+            echo "agents-dir=${{ inputs.agents-dir }}" >> $GITHUB_OUTPUT
+            echo "📁 Using provided agents-dir: ${{ inputs.agents-dir }}"
+          elif [ -f "Makefile" ]; then
+            # Read AGENTS_DIR from Makefile (handles both ?= and = assignments)
+            MAKEFILE_AGENTS_DIR=$(grep -E '^AGENTS_DIR[[:space:]]*\\?=' Makefile | sed 's/^AGENTS_DIR[[:space:]]*[?:]=*[[:space:]]*//' | tr -d ' ')
+            if [ -n "$MAKEFILE_AGENTS_DIR" ]; then
+              echo "agents-dir=$MAKEFILE_AGENTS_DIR" >> $GITHUB_OUTPUT
+              echo "📁 Read AGENTS_DIR from Makefile: $MAKEFILE_AGENTS_DIR"
+            else
+              echo "agents-dir=agents" >> $GITHUB_OUTPUT
+              echo "📁 AGENTS_DIR not in Makefile, using default: agents"
+            fi
+          else
+            echo "agents-dir=agents" >> $GITHUB_OUTPUT
+            echo "📁 No Makefile found, using default: agents"
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup environment variables
+        run: |
+          case "${{ inputs.branch-name }}" in
+            dev)
+              echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+              echo "PREFIX=dev-" >> $GITHUB_ENV
+              ;;
+            stag)
+              echo "ENVIRONMENT=stag" >> $GITHUB_ENV
+              echo "PREFIX=stag-" >> $GITHUB_ENV
+              ;;
+            main)
+              echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+              echo "PREFIX=" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "::error::Unknown branch: ${{ inputs.branch-name }} (must be dev, stag, or main)"
+              exit 1
+              ;;
+          esac
+
+      - name: Deploy agent
+        run: |
+          AGENT="${{ matrix.agent }}"
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+
+          # Read gcp_project and gcp_location from agent's config.yaml
+          GCP_PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+          GCP_LOCATION=$(yq eval '.cloud_run.gcp_location // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+
+          # Validate required fields
+          if [ -z "$GCP_PROJECT" ]; then
+            echo "::error::gcp_project not found in config.yaml for agent: $AGENT"
+            exit 1
+          fi
+          if [ -z "$GCP_LOCATION" ]; then
+            echo "::error::gcp_location not found in config.yaml for agent: $AGENT"
+            exit 1
+          fi
+
+          # Export environment variables for make/python script
+          export GOOGLE_CLOUD_PROJECT=$GCP_PROJECT
+          export GOOGLE_CLOUD_LOCATION=$GCP_LOCATION
+          export GOOGLE_CLOUD_LOCATION_DEPLOY=$GCP_LOCATION
+          export AGENTS_DIR=$AGENTS_DIR
+
+          # Deploy using make (code-only mode for CI/CD by default)
+          if [ "${{ inputs.preserve-env }}" == "true" ]; then
+            echo "🚀 Deploying agent: $AGENT (code-only mode, env: $ENVIRONMENT)"
+            make deploy-code-only $AGENT $ENVIRONMENT
+          else
+            echo "🚀 Deploying agent: $AGENT (full deployment mode, env: $ENVIRONMENT)"
+            make deploy $AGENT $ENVIRONMENT
+          fi
+
+      - name: Report deployment result
+        if: always()
+        run: |
+          AGENT="${{ matrix.agent }}"
+          BRANCH="${{ inputs.branch-name }}"
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+
+          # Read project, location, and service name from agent's config.yaml
+          PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+          LOCATION=$(yq eval '.cloud_run.gcp_location // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+          SERVICE_NAME=$(yq eval '.cloud_run.service_name // "'$AGENT'-service"' "$AGENTS_DIR/$AGENT/config.yaml")
+          FINAL_SERVICE_NAME="${PREFIX}${SERVICE_NAME}"
+
+          {
+            echo ""
+            echo "---"
+            echo ""
+            if [ "${{ job.status }}" == "success" ]; then
+              echo "### ✅ Deployment Successful"
+            else
+              echo "### ❌ Deployment Failed"
+            fi
+            echo ""
+            echo "| Setting | Value |"
+            echo "|---------|-------|"
+            echo "| Agent | $AGENT |"
+            echo "| Base Service | \`${SERVICE_NAME}\` |"
+            echo "| Deployed Service | \`${FINAL_SERVICE_NAME}\` |"
+            echo "| Environment | $ENVIRONMENT |"
+            echo "| Branch | $BRANCH |"
+            echo "| Project | ${PROJECT} |"
+            echo ""
+            echo "#### Service URL"
+            echo ""
+            echo "\`\`\`"
+            echo "gcloud run services describe ${FINAL_SERVICE_NAME} \\"
+            echo "  --region=${LOCATION} \\"
+            echo "  --project=${PROJECT} \\"
+            echo "  --format='value(status.url)'"
+            echo "\`\`\`"
+          } >> $GITHUB_STEP_SUMMARY

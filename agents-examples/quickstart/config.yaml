@@ -15,6 +15,8 @@ docker:
 # Cloud Run configuration
 cloud_run:
   service_name: quickstart-agent
+  gcp_project: galvanic-style-239913
+  gcp_location: us-central1
   # Additional gcloud run deploy flags - user can add any flags they want
   additional_flags:
     - "--memory=1Gi"

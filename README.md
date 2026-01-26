@@ -6,6 +6,7 @@ Dynamic deployment system for ADK agents with per-agent configuration, Google Cl
 
 - [🚀 Quick Start](#-quick-start)
 - [🔗 As Git Sub-module](#-as-git-sub-module)
+- [🤖 GitHub Actions](#-github-actions)
 - [⚙️ Core Concepts](#️-core-concepts)
 - [📦 Shared Utilities Package](#-shared-utilities-package)
 - [🔧 Agent Configuration](#-agent-configuration)
@@ -67,6 +68,35 @@ make delete your-agent
 
 > **📚 Complete sub-module guide**: See [SUBMODULE.md](SUBMODULE.md) for detailed setup instructions and advanced usage.
 
+## 🤖 GitHub Actions
+
+Automatically deploy agents to Cloud Run when code merges to `dev`, `stag`, or `main` branches.
+
+### Quick Setup
+
+1. **Add GitHub Secret** (`GCP_SA_KEY`) with your service account JSON
+2. **Configure each agent** with `gcp_project` and `gcp_location` in `config.yaml`
+3. **Create caller workflow** - see [.github/workflows/CI_CD.md](.github/workflows/CI_CD.md)
+
+### How It Works
+
+| Branch | Service Name | Example |
+|--------|-------------|---------|
+| `dev` | `dev-{service}` | `dev-my-agent` |
+| `stag` | `stag-{service}` | `stag-my-agent` |
+| `main` | `{service}` | `my-agent` |
+
+Each agent defines its own project/location in `config.yaml`:
+
+```yaml
+cloud_run:
+  service_name: my-agent
+  gcp_project: my-project-id
+  gcp_location: us-central1
+```
+
+> **📚 Setup guide**: [.github/workflows/CI_CD.md](.github/workflows/CI_CD.md) | **📚 Technical specs**: [GITHUB_ACTIONS.md](GITHUB_ACTIONS.md)
+
 ## ⚙️ Core Concepts
 
 ### Environment Variable Priority
@@ -93,8 +123,9 @@ cloud_run:
 The deployment engine includes a shared utilities package (`adk-shared`) that provides common functionality for agents, including environment management and helper functions.
 
 ### Quick Start
-# Add to requirements.txt
+
 ```bash
+# Add to requirements.txt
 adk-shared @ git+https://github.com/AlfieDelgado/adk-deployment-engine.git@main#subdirectory=shared
 ```
 
@@ -173,16 +204,26 @@ make create-agent-engine <agent-name>
 ```bash
 # Agent Management
 make list-agents                  # List available agents
-make deploy <agent_name>         # Deploy to Cloud Run
+make deploy <agent_name>         # Deploy to Cloud Run (full deployment)
+make deploy <agent_name> dev     # Deploy to dev environment
+make deploy <agent_name> stag    # Deploy to staging environment
 make delete <agent_name>         # Delete service
+
+# Code-Only Deployment (for CI/CD or selective updates)
+make deploy-code-only <agent_name>        # Deploy code only (preserves env vars/secrets)
+make deploy-code-only <agent_name> dev    # Deploy to dev (code-only)
+make deploy-code-only <agent_name> stag   # Deploy to staging (code-only)
 
 # Testing & Validation
 make deploy-dry <agent_name>     # Test deployment (dry run)
+make deploy-code-only-dry <agent_name>  # Test code-only deployment (dry run)
 make test-build <agent_name>     # Test build structure
 make test-dockerfile <agent_name> # Test Dockerfile generation
 
 # Agent Engine (for session management)
 make create-agent-engine <agent>  # Create Vertex AI Agent Engine
+make list-agent-engines <agent>   # List agent engines for agent
+make delete-agent-engine <agent>  # Delete agent engine
 
 # Project Setup
 make enable-services              # Enable required Google Cloud APIs
@@ -265,8 +306,10 @@ cloud_run:
 GOOGLE_CLOUD_PROJECT="your-project-id"
 GOOGLE_CLOUD_LOCATION="us-central1"
 
-# API configuration
-GOOGLE_GENAI_USE_VERTEXAI="true-or-false-to-use-vertexai-here"
+# API configuration (choose one)
+# Option 1: Vertex AI mode (set GOOGLE_GENAI_USE_VERTEXAI=true)
+# Option 2: Gemini Developer API mode (set GOOGLE_GENAI_USE_VERTEXAI=false and provide GOOGLE_API_KEY)
+GOOGLE_GENAI_USE_VERTEXAI="false"
 GOOGLE_API_KEY="your-api-key-here"
 
 # Optional settings
@@ -294,8 +337,6 @@ tags:
 ```
 
 ## 🐛 Troubleshooting
-
-### Common Issues
 
 | Problem | Solution |
 |---------|----------|
@@ -326,6 +367,14 @@ gcloud config list
 2. Create a feature branch
 3. Test with `make test-*` commands
 4. Submit a pull request
+
+## 🚧 Next Steps
+
+Planned enhancements for future releases:
+
+- Add workflow status badge to README
+- Improve error messages in deploy.yml for better debugging
+- Add deployment URL to workflow summary for quick access
 
 ## 📄 License
 

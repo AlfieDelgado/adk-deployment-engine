@@ -14,7 +14,7 @@ DEPLOYMENT_ENGINE_DIR ?= .
 export DEPLOYMENT_ENGINE_DIR
 
 # Configurable agents directory (default to 'agents' for backward compatibility)
-AGENTS_DIR ?= agents-examples
+AGENTS_DIR ?= agents
 export AGENTS_DIR
 
 # Prevent Make from treating agent names as targets
@@ -44,7 +44,7 @@ help:
 	@echo "Setup Commands:"
 	@echo "  make enable-services         Enable required Google Cloud APIs"
 	@echo ""
-	@echo "Agent Deployment:"
+	@echo "Agent Deployment (Per-Agent Config):"
 	@echo "  make deploy <agent> [dev|stag]            Deploy agent with full config (default: production)"
 	@echo "  make deploy-dry <agent> [dev|stag]        Dry-run full deployment (shows gcloud command)"
 	@echo "  make deploy-code-only <agent> [dev|stag]  Deploy code only (preserves env vars/secrets)"

@@ -46,8 +46,9 @@ your-project/                         # Your main project (private)
     └── agents-examples/              # Example agents (for reference)
 ```
 
-### Makefile Configuration
+### Configuration
 
+**Makefile:**
 ```makefile
 AGENTS_DIR := agents
 DEPLOYMENT_ENGINE_DIR := adk-deployment-engine
@@ -57,12 +58,13 @@ include adk-deployment-engine/makefile
 ### Environment Variables (.env)
 
 ```bash
-# Required Google Cloud settings
 GOOGLE_CLOUD_PROJECT="your-project-id"
 GOOGLE_CLOUD_LOCATION="us-central1"
 
-# API configuration
-GOOGLE_GENAI_USE_VERTEXAI="True"
+# API Configuration (choose one):
+# Option 1: Vertex AI mode (set GOOGLE_GENAI_USE_VERTEXAI=true)
+# Option 2: Gemini Developer API mode (set GOOGLE_GENAI_USE_VERTEXAI=false and provide GOOGLE_API_KEY)
+GOOGLE_GENAI_USE_VERTEXAI="false"
 GOOGLE_API_KEY="your-api-key-here"
 ```
 
@@ -72,7 +74,7 @@ GOOGLE_API_KEY="your-api-key-here"
 # Create agent directory
 mkdir agents/my-agent
 
-# Create basic configuration
+# Create config.yaml
 cat > agents/my-agent/config.yaml << EOF
 description: My first agent
 tags: [my-agent, production]
@@ -82,10 +84,11 @@ docker:
 
 cloud_run:
   service_name: my-agent-service
+  gcp_project: my-project-id
+  gcp_location: us-central1
   additional_flags:
     - --memory=1Gi
     - --cpu=0.5
-    - --timeout=300s
 EOF
 
 # Create requirements.txt with shared utilities
@@ -109,50 +112,44 @@ my_agent = LlmAgent(
 )
 EOF
 
-# Add secrets (optional)
-cat > agents/my-agent/.env.secrets << EOF
-SERVICE_ACCOUNT="my-agent-sa@project.iam.gserviceaccount.com"
-SECRET_NAME="my-agent-api-key"
-EOF
-
-# Deploy!
+# Deploy
 make deploy my-agent
 ```
 
 ## 📦 Shared Utilities
 
-The deployment engine includes a shared utilities package (`adk-shared`) for common functionality across agents.
-
-### Key Features
-
-- ✅ **Git-based Installation**: No local submodule management required
-- ✅ **Version Control**: Pin to specific commits for reproducible builds
-- ✅ **Clean Imports**: Standard Python package imports
-- ✅ **Environment Management**: Automatic loading of `.env` files with priority
-- ✅ **Production Ready**: Works in both development and Docker deployments
-
-> **📚 Complete reference**: See [README.md - Shared Utilities Package](README.md#shared-utilities-package) for detailed documentation.
-
-## 🚀 Common Commands
+The deployment engine includes `adk-shared` for common functionality (env management, helpers).
 
 ```bash
-# Daily workflow
-make list-agents                    # See your agents
-make deploy my-agent               # Deploy your agent
-make delete my-agent               # Delete deployment
-
-# Testing & validation
-make deploy-dry my-agent           # Test deployment (dry run)
-make test-build my-agent           # Test build structure
-make test-dockerfile my-agent      # Test Dockerfile generation
-
-# Agent Engine (session management)
-make create-agent-engine my-agent  # Create Vertex AI Agent Engine
-make list-agent-engines my-agent   # List your agent engines
-
-# Project setup
-make enable-services               # Enable required Google Cloud APIs
+# Add to requirements.txt
+adk-shared @ git+https://github.com/AlfieDelgado/adk-deployment-engine.git@main#subdirectory=shared
 ```
+
+> **📚 Complete documentation**: See [README.md - Shared Utilities Package](README.md#shared-utilities-package)
+
+## 🤖 Setting Up GitHub Actions
+
+> **📚 Complete setup guide**: See [.github/workflows/CI_CD.md](.github/workflows/CI_CD.md) for step-by-step GitHub Actions instructions.
+
+### Quick Summary
+
+When using this repo as a submodule, you can use the reusable GitHub Actions workflows for automatic deployments.
+
+**Basic steps:**
+1. Create `GCP_SA_KEY` secret in your GitHub repository
+2. Copy `.github/workflows/ci-cd.yml` from the submodule as an example
+3. Remove or comment out the `if: vars.ENABLE_CI_CD == 'true'` condition (this only applies to the adk-deployment-engine repo)
+4. Customize the workflow for your repo (change workflow references, update agents-dir)
+
+**Each agent's `config.yaml` must include:**
+```yaml
+cloud_run:
+  service_name: my-agent-service
+  gcp_project: my-project-id      # Required for GitHub Actions
+  gcp_location: us-central1       # Required for GitHub Actions
+```
+
+See [.github/workflows/CI_CD.md](.github/workflows/CI_CD.md) for complete instructions.
 
 ## 🔄 Updates & Maintenance
 
@@ -178,22 +175,6 @@ git submodule update --init --recursive
 - ✅ Keep `agents/` directory in `.gitignore`
 - ✅ Use descriptive service names
 
-## 🔍 Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| **"No agents found"** | Check `AGENTS_DIR` setting and `config.yaml` exists |
-| **Environment variable errors** | Verify `.env` file has required variables |
-| **Permission errors** | Check service account permissions and IAM roles |
-| **Deployment timeouts** | Increase `--timeout` in `config.yaml` |
-
-```bash
-# Debug commands
-python adk-deployment-engine/utils/deploy_agent.py --deploy my-agent --verbose
-make test-build my-agent
-make test-dockerfile my-agent
-```
-
 ## 📚 Advanced Usage
 
 ### Custom Agents Directory
@@ -209,17 +190,3 @@ include adk-deployment-engine/makefile
 - **Issues**: Open GitHub Issues for bugs/feature requests
 - **Code**: Fork repository, make changes, submit Pull Request
 - **Examples**: See `adk-deployment-engine/agents-examples/` for reference
-
----
-
-## 🎉 Success!
-
-You now have:
-- ✅ Private agent implementations
-- ✅ Professional deployment engine
-- ✅ Shared utilities package
-- ✅ Automatic updates and improvements
-- ✅ Same simple interface as standalone
-- ✅ Full control over your code
-
-Happy deploying! 🚀
