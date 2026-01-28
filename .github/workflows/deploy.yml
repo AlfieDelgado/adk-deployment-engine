@@ -66,10 +66,6 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
-
       - name: Setup environment variables
         run: |
           case "${{ inputs.branch-name }}" in
@@ -90,6 +86,19 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Install agent dependencies
+        run: |
+          AGENT="${{ matrix.agent }}"
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+
+          # Install agent's requirements.txt if it exists
+          if [ -f "$AGENTS_DIR/$AGENT/requirements.txt" ]; then
+            echo "📦 Installing dependencies for $AGENT..."
+            pip install -r "$AGENTS_DIR/$AGENT/requirements.txt"
+          else
+            echo "ℹ️  No requirements.txt found for $AGENT"
+          fi
 
       - name: Deploy agent
         run: |
