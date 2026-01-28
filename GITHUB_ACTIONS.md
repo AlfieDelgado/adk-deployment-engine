@@ -181,7 +181,7 @@ Each branch deploys to services with environment-specific prefixes:
 **Inputs:**
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `agents-dir` | string | No | `agents` | Directory containing agent configurations |
+| `agents-dir` | string | No | (auto-detect) | Directory containing agent configurations. Auto-detects from Makefile AGENTS_DIR, defaults to 'agents'. Set AGENTS_DIR GitHub variable to override. |
 
 **Outputs:**
 | Name | Type | Description |
@@ -218,7 +218,7 @@ Each branch deploys to services with environment-specific prefixes:
 **Inputs:**
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `agents-dir` | string | No | `agents` | Directory containing agent configurations |
+| `agents-dir` | string | No | (auto-detect) | Directory containing agent configurations. Auto-detects from Makefile AGENTS_DIR, defaults to 'agents'. Set AGENTS_DIR GitHub variable to override. |
 | `agents-to-deploy` | string | Yes | - | JSON array of agent names to deploy |
 | `should-deploy-all` | boolean | No | `false` | If true, deploy all agents |
 | `branch-name` | string | Yes | - | Name of branch being deployed (`dev`, `stag`, or `main`) |
@@ -354,7 +354,7 @@ jobs:
   detect:
     uses: AlfieDelgado/adk-deployment-engine/.github/workflows/detect-changes.yml@main
     with:
-      agents-dir: 'agents'
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}  # Auto-detects from Makefile, defaults to 'agents'
 
   deploy:
     needs: detect
@@ -362,7 +362,7 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     uses: AlfieDelgado/adk-deployment-engine/.github/workflows/deploy.yml@main
     with:
-      agents-dir: 'agents'
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}  # Auto-detects from Makefile, defaults to 'agents'
       agents-to-deploy: ${{ needs.detect.outputs.agents-to-deploy }}
       should-deploy-all: ${{ needs.detect.outputs.should-deploy-all }}
       branch-name: ${{ github.ref_name }}

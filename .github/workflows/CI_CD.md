@@ -2,7 +2,9 @@
 
 Automatically deploy ADK agents to Cloud Run when code merges to `dev`, `stag`, or `main`.
 
-> **Note for adk-deployment-engine repo**: This workflow is disabled by default. To enable CI/CD for testing `agents-examples`, set the `ENABLE_CI_CD` repository variable to `true` (Settings → Secrets and variables → Actions → Variables).
+> **Note for adk-deployment-engine repo**: This workflow is disabled by default. To enable CI/CD for testing `agents-examples`, set these repository variables (Settings → Secrets and variables → Actions → Variables):
+> - `ENABLE_CI_CD` = `true`
+> - `AGENTS_DIR` = `agents-examples`
 
 ---
 
@@ -13,7 +15,7 @@ Automatically deploy ADK agents to Cloud Run when code merges to `dev`, `stag`, 
 **Settings → Secrets and variables → Actions → New repository secret**
 
 Name: `GCP_SA_KEY`
-Value: Your service account JSON (with Cloud Run Admin, Service Account User, Secret Manager Admin roles)
+Value: Your service account JSON (with roles/run.developer, roles/iam.serviceAccountUser)
 
 ### 2. Configure Each Agent
 
@@ -58,14 +60,14 @@ jobs:
     # if: vars.ENABLE_CI_CD == 'true'  ← Remove this line
     uses: AlfieDelgado/adk-deployment-engine/.github/workflows/detect-changes.yml@main
     with:
-      agents-dir: 'agents'  # Omit to auto-detect from Makefile
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}  # Auto-detects from Makefile, defaults to 'agents'
 
   deploy:
     needs: detect
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     uses: AlfieDelgado/adk-deployment-engine/.github/workflows/deploy.yml@main
     with:
-      agents-dir: 'agents'  # Omit to auto-detect from Makefile
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}  # Auto-detects from Makefile, defaults to 'agents'
       agents-to-deploy: ${{ needs.detect.outputs.agents-to-deploy }}
       branch-name: ${{ github.ref_name }}
     secrets:
@@ -82,7 +84,7 @@ jobs:
     # if: vars.ENABLE_CI_CD == 'true'  ← Remove this line
     uses: AlfieDelgado/adk-deployment-engine/.github/workflows/detect-changes.yml@main
     with:
-      agents-dir: 'agents'
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}  # Auto-detects from Makefile
 
   deploy:
     needs: detect
@@ -120,9 +122,9 @@ Then CI/CD handles re-deployments.
 | Problem | Solution |
 |---------|----------|
 | Missing `gcp_project` in config | Add `gcp_project` and `gcp_location` to `cloud_run` section |
-| Permission denied | Grant Cloud Run Admin, Service Account User, Secret Manager Admin to SA |
+| Permission denied | Grant roles/run.developer, roles/iam.serviceAccountUser to SA |
 | No agents to deploy | Ensure each agent has `config.yaml` and first deploy was manual |
-| Agent directory not found | Check `agents-dir` parameter or ensure Makefile has `AGENTS_DIR` |
+| Agent directory not found | Ensure Makefile has `AGENTS_DIR`, or set `AGENTS_DIR` GitHub variable |
 
 ---
 

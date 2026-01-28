@@ -8,16 +8,19 @@ name: CI/CD
 # - To enable: Settings → Secrets and variables → Actions → Variables → New repository variable
 #   Name: ENABLE_CI_CD
 #   Value: true
+#   Name: AGENTS_DIR
+#   Value: agents-examples
 #
 # === FOR SUBMODULE USERS ===
 # - Use this as an EXAMPLE for your own ci-cd.yml
 # - Copy this file to your repo: .github/workflows/ci-cd.yml
 # - REMOVE or COMMENT the 'if: vars.ENABLE_CI_CD == 'true'' condition below
-# - Customize workflow references and agents-dir as needed
+# - AGENTS_DIR behavior: auto-detects from Makefile, defaults to 'agents'
+#   Optionally set AGENTS_DIR variable to override (e.g., for custom directory)
 #
 # When using as a submodule:
-#   1. Change workflow references from './.github/workflows/' to 'YOUR_ORG/adk-deployment-engine/.github/workflows/@main'
-#   2. Update 'agents-dir: agents-examples' to match your AGENTS_DIR (or omit to auto-detect from Makefile)
+#   1. Change workflow references from './.github/workflows/' to 'AlfieDelgado/adk-deployment-engine/.github/workflows/@main'
+#   2. Set AGENTS_DIR in your Makefile (or set as GitHub variable to override)
 #   3. Ensure GCP_SA_KEY secret exists in your repository
 #
 # See SUBMODULE.md "Setting Up GitHub Actions" section for complete instructions.
@@ -39,7 +42,7 @@ jobs:
     if: vars.ENABLE_CI_CD == 'true'
     uses: ./.github/workflows/detect-changes.yml
     with:
-      agents-dir: 'agents-examples'
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}
 
   deploy:
     needs: detect
@@ -49,7 +52,7 @@ jobs:
       (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true))
     uses: ./.github/workflows/deploy.yml
     with:
-      agents-dir: 'agents-examples'
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}
       agents-to-deploy: ${{ needs.detect.outputs.agents-to-deploy }}
       branch-name: ${{ github.ref_name }}
     secrets:

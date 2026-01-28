@@ -139,7 +139,8 @@ When using this repo as a submodule, you can use the reusable GitHub Actions wor
 1. Create `GCP_SA_KEY` secret in your GitHub repository
 2. Copy `.github/workflows/ci-cd.yml` from the submodule as an example
 3. Remove or comment out the `if: vars.ENABLE_CI_CD == 'true'` condition (this only applies to the adk-deployment-engine repo)
-4. Customize the workflow for your repo (change workflow references, update agents-dir)
+4. Set `AGENTS_DIR` in your Makefile (or optionally as a GitHub variable to override)
+5. Change workflow references to point to your org (e.g., `AlfieDelgado/adk-deployment-engine/.github/workflows/@main`)
 
 **Each agent's `config.yaml` must include:**
 ```yaml
@@ -179,11 +180,17 @@ git submodule update --init --recursive
 
 ### Custom Agents Directory
 
+**Via Makefile (recommended):**
 ```makefile
 AGENTS_DIR := my-custom-agents
 DEPLOYMENT_ENGINE_DIR := adk-deployment-engine
 include adk-deployment-engine/makefile
 ```
+
+**Via GitHub Variable (optional override):**
+- Set `AGENTS_DIR` in: Settings → Secrets and variables → Actions → Variables
+- Use this for per-environment overrides without modifying Makefile
+- The workflow auto-detects from Makefile first, then checks the GitHub variable
 
 ## 🤝 Contributing
 
