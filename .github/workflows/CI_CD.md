@@ -15,7 +15,35 @@ Automatically deploy ADK agents to Cloud Run when code merges to `dev`, `stag`, 
 **Settings → Secrets and variables → Actions → New repository secret**
 
 Name: `GCP_SA_KEY`
-Value: Your service account JSON (with roles/run.developer, roles/iam.serviceAccountUser)
+Value: Your service account JSON with the following IAM roles:
+
+| Role | Level | Purpose |
+|------|-------|---------|
+| `roles/run.sourceDeveloper` | Project | Deploys service & manages build artifacts |
+| `roles/serviceusage.serviceUsageConsumer` | Project | Permission to call required Google APIs |
+| `roles/logging.logWriter` | Project | Write build/deployment logs |
+| `roles/iam.serviceAccountUser` | Resource | Act as the Cloud Run runtime SA |
+
+```bash
+# Commands to grant the required roles
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:YOUR_SA_EMAIL" \
+  --role="roles/run.sourceDeveloper"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:YOUR_SA_EMAIL" \
+  --role="roles/serviceusage.serviceUsageConsumer"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:YOUR_SA_EMAIL" \
+  --role="roles/logging.logWriter"
+
+gcloud iam service-accounts add-iam-policy-binding \
+  PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+  --member="serviceAccount:YOUR_SA_EMAIL" \
+  --role="roles/iam.serviceAccountUser" \
+  --project=PROJECT_ID
+```
 
 ### 2. Configure Each Agent
 
@@ -122,7 +150,7 @@ Then CI/CD handles re-deployments.
 | Problem | Solution |
 |---------|----------|
 | Missing `gcp_project` in config | Add `gcp_project` and `gcp_location` to `cloud_run` section |
-| Permission denied | Grant roles/run.developer, roles/iam.serviceAccountUser to SA |
+| Permission denied | Grant all 4 IAM roles (sourceDeveloper, serviceUsageConsumer, logWriter, serviceAccountUser) to SA |
 | No agents to deploy | Ensure each agent has `config.yaml` and first deploy was manual |
 | Agent directory not found | Ensure Makefile has `AGENTS_DIR`, or set `AGENTS_DIR` GitHub variable |
 
