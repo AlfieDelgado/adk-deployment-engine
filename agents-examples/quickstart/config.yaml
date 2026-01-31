@@ -19,9 +19,9 @@ cloud_run:
   gcp_location: us-central1
   # Additional gcloud run deploy flags - user can add any flags they want
   additional_flags:
-    - "--memory=1Gi"
-    - "--cpu=1"
-    - "--min-instances=0"
-    - "--max-instances=2"
-    - "--concurrency=10"
-    - "--timeout=60s"
+    - --memory=1Gi
+    - --cpu=1
+    - --min-instances=0
+    - --max-instances=2
+    - --concurrency=10
+    - --timeout=60s
