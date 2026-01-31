@@ -1,0 +1,22 @@
+# CODEOWNERS File
+#
+# This file defines who needs to approve pull requests for specific files.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default code owner for the entire repository
+* @AlfieDelgado
+
+# Critical infrastructure - requires approval
+.github/workflows/* @AlfieDelgado
+.github/CODEOWNERS @AlfieDelgado
+
+# Deployment engine core - requires approval
+utils/* @AlfieDelgado
+makefile @AlfieDelgado
+environment.yml @AlfieDelgado
+
+# Shared utilities - requires approval
+shared/* @AlfieDelgado
+
+# Agent examples - can be relaxed in future if needed
+agents-examples/* @AlfieDelgado

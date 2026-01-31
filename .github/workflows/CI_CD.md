@@ -197,5 +197,3 @@ Before pushing to branches:
 - [ ] Tested locally: `make deploy-code-only-dry <agent>`
 
 ---
-
-**Technical specs:** See [GITHUB_ACTIONS.md](../../GITHUB_ACTIONS.md)

@@ -14,6 +14,7 @@ Dynamic deployment system for ADK agents with per-agent configuration, Google Cl
 - [📋 Configuration Examples](#-configuration-examples)
 - [🔐 Environment Setup](#-environment-setup)
 - [🐛 Troubleshooting](#-troubleshooting)
+- [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 
 ---
@@ -95,7 +96,7 @@ cloud_run:
   gcp_location: us-central1
 ```
 
-> **📚 Setup guide**: [.github/workflows/CI_CD.md](.github/workflows/CI_CD.md) | **📚 Technical specs**: [GITHUB_ACTIONS.md](GITHUB_ACTIONS.md)
+> **📚 Setup guide**: [.github/workflows/CI_CD.md](.github/workflows/CI_CD.md)
 
 ## ⚙️ Core Concepts
 
@@ -363,10 +364,24 @@ gcloud config list
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Test with `make test-*` commands
-4. Submit a pull request
+We welcome contributions! Please follow our git workflow:
+
+1. **Choose your base branch:**
+   - `dev` → for new features (standard workflow)
+   - `main` → for hotfixes or production-ready changes
+   - `stag` → for pre-production validation
+
+2. **Create a feature branch:** `git checkout -b feat/your-feature`
+
+3. **Make changes** with conventional commits (`feat:`, `fix:`, `docs:`, etc.)
+
+4. **Test locally**
+
+5. **Submit a pull request** to your target branch (uses **rebase and merge**)
+
+**Branch protection rules apply:** `main`, `dev`, and `stag` require PRs with code owner approval.
+
+> **📚 Git workflow & branching strategy**: See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed git workflow, merging best practices, and branch strategy.
 
 ## 🚧 Next Steps
 
