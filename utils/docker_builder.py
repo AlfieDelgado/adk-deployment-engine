@@ -143,8 +143,8 @@ def should_ignore(path, ignore_patterns, base_path):
             # Convert pattern/** to pattern/*
             if test_pattern.endswith('/**'):
                 test_pattern = test_pattern[:-3] + '/*'
-            else:
-                test_pattern = effective_pattern
+        else:
+            test_pattern = effective_pattern
 
         # Check if path matches pattern exactly
         if fnmatch.fnmatch(path_str, test_pattern):
