@@ -46,10 +46,12 @@ jobs:
 
   deploy:
     needs: detect
-    # Only run on merge or direct push
+    # Only run on merge or direct push AND when there are agents to deploy
     if: |
       vars.ENABLE_CI_CD == 'true' &&
-      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true))
+      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)) &&
+      needs.detect.outputs.agents-to-deploy != '[]' &&
+      needs.detect.outputs.agents-to-deploy != ''
     uses: ./.github/workflows/deploy.yml
     with:
       agents-dir: ${{ vars.AGENTS_DIR || '' }}
