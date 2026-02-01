@@ -95,7 +95,7 @@ jobs:
           # Read gcp_project, gcp_location, and service_name from agent's config.yaml
           GCP_PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
           GCP_LOCATION=$(yq eval '.cloud_run.gcp_location // ""' "$AGENTS_DIR/$AGENT/config.yaml")
-          SERVICE_NAME=$(yq eval '.cloud_run.service_name || "'$AGENT'-service"' "$AGENTS_DIR/$AGENT/config.yaml")
+          SERVICE_NAME=$(yq eval '.cloud_run.service_name // "'$AGENT'-service"' "$AGENTS_DIR/$AGENT/config.yaml")
           FINAL_SERVICE_NAME="${PREFIX}${SERVICE_NAME}"
 
           # Check if service exists in Cloud Run
