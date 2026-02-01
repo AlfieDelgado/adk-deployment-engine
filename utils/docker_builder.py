@@ -39,7 +39,15 @@ def modify_dockerfile_template(agent_name, config):
     # Docker configuration
     docker_config = config.get("docker", {})
     system_packages = docker_config.get("system_packages", [])
+
+    # Support both old (extra_steps) and new (pre_copy/post_copy) formats
     extra_steps = docker_config.get("extra_steps", [])
+    pre_copy_steps = docker_config.get("extra_steps_pre_copy", [])
+    post_copy_steps = docker_config.get("extra_steps_post_copy", [])
+    
+    # For backward compatibility: if using old extra_steps, put them in pre_copy
+    if extra_steps and not pre_copy_steps:
+        pre_copy_steps = extra_steps
 
     # Replace placeholders with actual content
     replacements = {
@@ -49,23 +57,27 @@ def modify_dockerfile_template(agent_name, config):
     # Handle system packages
     if system_packages:
         packages_block = "RUN apt-get update && apt-get install -y \\"
-        for i, pkg in enumerate(system_packages):
-            if i == len(system_packages) - 1:
-                packages_block += f"\n        {pkg} \\"
-            else:
-                packages_block += f"\n        {pkg} &&"
+        for pkg in system_packages:
+            packages_block += f"\n        {pkg} \\"
         packages_block += "\n    && rm -rf /var/lib/apt/lists/*"
         replacements["# SYSTEM_PACKAGES_PLACEHOLDER"] = packages_block
     else:
         replacements["# SYSTEM_PACKAGES_PLACEHOLDER"] = ""
 
-    # Handle extra steps
-    if extra_steps:
-        extra_steps_block = "# Extra configuration steps\n"
-        extra_steps_block += "\n".join(extra_steps)
-        replacements["# EXTRA_STEPS_PLACEHOLDER"] = extra_steps_block
+    # Handle pre-copy steps (before COPY . .)
+    if pre_copy_steps:
+        replacements["# PRE_COPY_STEPS_PLACEHOLDER"] = "\n".join(pre_copy_steps)
     else:
-        replacements["# EXTRA_STEPS_PLACEHOLDER"] = ""
+        replacements["# PRE_COPY_STEPS_PLACEHOLDER"] = ""
+
+    # Handle post-copy steps (after COPY . .)
+    if post_copy_steps:
+        replacements["# POST_COPY_STEPS_PLACEHOLDER"] = "\n".join(post_copy_steps)
+    else:
+        replacements["# POST_COPY_STEPS_PLACEHOLDER"] = ""
+    
+    # Handle legacy extra_steps placeholder for backward compatibility
+    replacements["# EXTRA_STEPS_PLACEHOLDER"] = ""
 
     # Apply all replacements
     for placeholder, replacement in replacements.items():
@@ -106,7 +118,7 @@ def should_ignore(path, ignore_patterns, base_path):
 
     Args:
         path: Path to check
-        ignore_patterns: List of ignore patterns
+        ignore_patterns: List of ignore patterns (including negation patterns with !)
         base_path: Base path for relative calculations
 
     Returns:
@@ -117,41 +129,54 @@ def should_ignore(path, ignore_patterns, base_path):
     # Convert path to string for pattern matching
     path_str = str(relative_path)
 
+    # Track final result - last matching pattern wins
+    is_ignored = False
+
     for pattern in ignore_patterns:
+        is_negation = pattern.startswith('!')
+        effective_pattern = pattern[1:] if is_negation else pattern
+
         # Handle patterns with ** (recursive)
-        if '**' in pattern:
+        if '**' in effective_pattern:
             # Convert **/pattern to */pattern for fnmatch
-            pattern = pattern.replace('**/', '*')
+            test_pattern = effective_pattern.replace('**/', '*')
             # Convert pattern/** to pattern/*
-            if pattern.endswith('/**'):
-                pattern = pattern[:-3] + '/*'
+            if test_pattern.endswith('/**'):
+                test_pattern = test_pattern[:-3] + '/*'
+            else:
+                test_pattern = effective_pattern
 
         # Check if path matches pattern exactly
-        if fnmatch.fnmatch(path_str, pattern):
-            return True
+        if fnmatch.fnmatch(path_str, test_pattern):
+            is_ignored = not is_negation
+            continue
 
         # Check if directory name matches pattern (for patterns like __pycache__)
-        if path.is_dir() and fnmatch.fnmatch(path.name, pattern):
-            return True
+        if path.is_dir() and fnmatch.fnmatch(path.name, test_pattern):
+            is_ignored = not is_negation
+            continue
 
         # Also check if any parent directory matches
         path_parts = Path(path_str).parts
         for i in range(len(path_parts)):
             parent_path = '/'.join(path_parts[:i+1])
-            if fnmatch.fnmatch(parent_path, pattern):
-                return True
+            if fnmatch.fnmatch(parent_path, test_pattern):
+                is_ignored = not is_negation
+                continue
 
         # Special handling for patterns ending with / (directories)
-        if pattern.endswith('/') and path.is_dir():
-            dir_pattern = pattern[:-1]  # Remove trailing /
+        if test_pattern.endswith('/') and path.is_dir():
+            dir_pattern = test_pattern[:-1]  # Remove trailing /
             # Check if directory name matches
             if fnmatch.fnmatch(path.name, dir_pattern):
-                return True
+                is_ignored = not is_negation
+                continue
             # Check if relative path matches
             if fnmatch.fnmatch(path_str, dir_pattern):
-                return True
+                is_ignored = not is_negation
+                continue
 
-    return False
+    return is_ignored
 
 
 def copy_directory_with_ignore(src, dst, ignore_patterns, is_agent_dir=False):

@@ -3,10 +3,11 @@
 .gitignore
 
 # Python
-__pycache__
-*.pyc
-*.pyo
-*.pyd
+**/*__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.egg-info/
 .Python
 env
 pip-log.txt
@@ -49,10 +50,10 @@ Thumbs.db
 .claude/
 
 # Environment files
-env.local
-.env.*.local
-.env
-.env.*
+**/env.local
+**/.env.*.local
+**/.env
+**/.env.*
 
 # Secrets (important for security)
 **/.env.secrets
@@ -74,3 +75,13 @@ htmlcov
 # Logs
 logs/
 *.log
+
+# Node
+**/node_modules
+**/build/
+
+# JS/TS
+**/*.json
+!**/package-lock.json
+!**/package.json
+!**/tsconfig.json
