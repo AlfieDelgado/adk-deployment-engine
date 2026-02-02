@@ -102,7 +102,11 @@ jobs:
           if ! gcloud run services describe "$FINAL_SERVICE_NAME" --region="$GCP_LOCATION" --project="$GCP_PROJECT" --format='value(name)' >/dev/null 2>&1; then
             echo "::error::Service '$FINAL_SERVICE_NAME' does not exist in Cloud Run."
             echo "CI/CD uses code-only deployment which preserves existing env vars and secrets."
-            echo "For first-time deployment, run: make deploy $AGENT $ENVIRONMENT"
+            if [ "$ENVIRONMENT" = "prod" ]; then
+              echo "For first-time deployment, run: make deploy $AGENT"
+            else
+              echo "For first-time deployment, run: make deploy $AGENT $ENVIRONMENT"
+            fi
             exit 1
           fi
 
