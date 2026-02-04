@@ -50,7 +50,7 @@ Thumbs.db
 .claude/
 
 # ADK local testing
-.adk/
+**/.adk/
 
 # Environment files
 **/env.local

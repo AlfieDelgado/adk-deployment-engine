@@ -11,6 +11,7 @@ Dynamic deployment system for ADK agents with per-agent configuration, Google Cl
 - [📦 Shared Utilities Package](#-shared-utilities-package)
 - [🔧 Agent Configuration](#-agent-configuration)
 - [🚀 Deployment Commands](#-deployment-commands)
+  - [Deployment Hooks](#deployment-hooks)
 - [📋 Configuration Examples](#-configuration-examples)
 - [🔐 Environment Setup](#-environment-setup)
 - [🐛 Troubleshooting](#-troubleshooting)
@@ -199,6 +200,34 @@ make create-agent-engine <agent-name>
 ```
 
 ## 🚀 Deployment Commands
+
+### Deployment Hooks
+
+Automatically run custom scripts during deployment. Configure hooks in `config.yaml`:
+
+```yaml
+hooks:
+  pre_deploy:
+    - scripts/pre-deploy.sh    # Runs before deployment
+  post_deploy:
+    - scripts/post-deploy.sh   # Runs after successful deployment
+```
+
+**Usage:**
+```bash
+make deploy <agent>              # Runs pre → deploy → post hooks
+make deploy <agent> --skip-hooks # Skip hooks
+make run-hook <agent> <script-path>  # Run hook manually
+```
+
+**Common hook use cases:**
+- MCP operations (sync, verify)
+- Environment validation
+- Health checks after deployment
+- Sending notifications
+- Running tests
+
+> **Note**: Hook scripts contain inline comments with usage examples.
 
 ### Essential Commands
 

@@ -13,6 +13,7 @@ utils/
 ├── env_manager.py              # Environment management module
 ├── docker_builder.py           # Docker and build operations
 ├── cloud_deployer.py           # Cloud Run deployment module
+├── run_hooks.py                # Deployment hooks runner
 └── testing_utils.py            # Testing utilities
 ```
 
@@ -123,6 +124,42 @@ Utility script for makefile operations with intelligent service management.
 make delete customer_service  # Deletes "customer-service-agent" from config.yaml
 ```
 
+## 🔗 run_hooks.py
+
+Deployment hooks runner that executes custom scripts during deployment.
+
+### Key Features
+
+- **Configuration-based**: Hooks defined in agent `config.yaml`
+- **Pre/Post stages**: Runs scripts before or after deployment
+- **Manual execution**: Supports running hooks outside deployment
+- **Skip support**: Can bypass hooks with `--skip-hooks` flag
+- **Error handling**: Fails deployment if any hook fails
+
+### Usage
+
+```bash
+# Automatic (runs during deploy)
+make deploy <agent>              # Runs all hooks
+make deploy <agent> --skip-hooks # Skip hooks
+
+# Manual execution
+make run-hook <agent> <script-path>    # Run specific hook
+make run-hook <agent>                  # List configured hooks
+```
+
+### Hook Configuration
+
+In `agents/<agent>/config.yaml`:
+
+```yaml
+hooks:
+  pre_deploy:
+    - scripts/pre-deploy.sh    # Runs before deployment
+  post_deploy:
+    - scripts/post-deploy.sh   # Runs after successful deployment
+```
+
 ## 🔗 Integration with Makefile
 
 ```makefile
@@ -132,6 +169,7 @@ make test-build agent       →   python utils/deploy_agent.py test build agent
 make test-dockerfile agent  →   python utils/deploy_agent.py test dockerfile agent
 make create-agent-engine    →   python utils/create_agent_engine.py agent
 make delete agent           →   python utils/makefile_helper.py delete agent
+make run-hook agent script  →   python utils/run_hooks.py agent --manual script
 ```
 
 ## 📊 Environment Variables

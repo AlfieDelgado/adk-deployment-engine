@@ -29,12 +29,10 @@ cloud_run:
 # Deployment hooks - scripts that run automatically during deployment
 # All paths are relative to the agent directory (agents/quickstart/)
 hooks:
-  # Pre-deployment hooks - run before deployment starts
+  # Pre-deployment hook - runs before deployment starts
   pre_deploy:
-    - scripts/mcp-sync.sh        # Sync MCP configuration before deploying
-    - scripts/validate-env.sh    # Validate environment variables (example)
+    - scripts/pre-deploy.sh      # MCP sync, env validation, tests
 
-  # Post-deployment hooks - run after successful deployment
+  # Post-deployment hook - runs after successful deployment
   post_deploy:
-    - scripts/health-check.sh    # Run health check after deployment (example)
-    - scripts/notify.sh          # Send deployment notification (example)
+    - scripts/post-deploy.sh     # Health checks, notifications, smoke tests

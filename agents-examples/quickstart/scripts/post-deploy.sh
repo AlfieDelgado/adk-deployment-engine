@@ -1,6 +1,6 @@
 #!/bin/bash
-# Post-deployment Script
-# This script runs tasks after successful deployment
+# Post-deployment Hook Script
+# Runs health checks and notifications after successful deployment
 
 set -e
 
@@ -8,24 +8,49 @@ echo "🎉 Running post-deployment tasks..."
 echo "📋 Agent: $1"
 echo ""
 
-# Example: Get deployment URL and run health check
-# SERVICE_NAME=$(grep "service_name:" config.yaml | awk '{print $2}')
+# ==============================================
+# Health Check
+# ==============================================
+# Uncomment to enable deployment health checks
+#
+# echo "🏥 Running health check..."
+# SERVICE_NAME=$(grep "service_name:" agents/$1/config.yaml | awk '{print $2}')
 # DEPLOYMENT_URL="https://$(gcloud run services describe $SERVICE_NAME --platform managed --region us-central1 --format 'value(status.url)')"
-
+#
 # echo "🌐 Deployment URL: $DEPLOYMENT_URL"
-# echo "🔍 Running health check..."
-# curl -f "$DEPLOYMENT_URL/health" || exit 1
+# response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYMENT_URL/health")
+#
+# if [ "$response" = "200" ]; then
+#     echo "✅ Health check passed (HTTP $response)"
+# else
+#     echo "❌ Health check failed (HTTP $response)"
+#     exit 1
+# fi
 
-# Example: Send deployment notification
+# ==============================================
+# Deployment Notification
+# ==============================================
+# Uncomment to send deployment notifications
+#
 # echo "📢 Sending deployment notification..."
 # webhook_url="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+# message="✅ Agent $1 deployed successfully!"
+#
 # curl -X POST -H 'Content-type: application/json' \
-#   --data "{\"text\":\"✅ Agent $1 deployed successfully to $DEPLOYMENT_URL\"}" \
+#   --data "{\"text\":\"$message\"}" \
 #   "$webhook_url"
 
-# Example: Update documentation
-# echo "📚 Updating deployment documentation..."
-# echo "$(date): Deployed $1" >> deployment-log.txt
+# ==============================================
+# Smoke Tests
+# ==============================================
+# Uncomment to run smoke tests after deployment
+#
+# echo "🧪 Running smoke tests..."
+# python -m pytest tests/smoke/
+# echo "✅ Smoke tests passed"
+
+# Test marker: creates a file to verify hook ran
+touch /tmp/post-deploy-ran.txt
 
 echo "✅ Post-deployment tasks completed!"
-echo "🎉 Agent $1 is now live!"
+echo "💡 Uncomment sections above to enable specific checks"

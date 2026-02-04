@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Utility script for running deployment hooks defined in config.yaml."""
 
+import argparse
 import os
-import sys
 import subprocess
+import sys
 import yaml
 from pathlib import Path
 
@@ -108,7 +109,7 @@ def run_hooks_for_stage(agent_name, stage, skip_hooks=False):
     Returns:
         bool: True if all hooks succeeded, False otherwise
     """
-    if skip_hooks == "true":
+    if skip_hooks:
         return True
 
     config = load_agent_config(agent_name)
@@ -154,46 +155,43 @@ def list_hooks(agent_name):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("❌ Error: Usage: python run_hooks.py <agent-name> <stage> [--list] [--manual <hook-path>]")
-        print("\n   Examples:")
-        print("   python run_hooks.py my-agent pre_deploy")
-        print("   python run_hooks.py my-agent post_deploy")
-        print("   python run_hooks.py my-agent --list")
-        print("   python run_hooks.py my-agent --manual scripts/mcp-sync.sh")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Run deployment hooks defined in agent config.yaml"
+    )
+    parser.add_argument("agent", help="Agent name")
+    parser.add_argument(
+        "stage",
+        nargs="?",
+        help="Hook stage (pre_deploy, post_deploy), or omit with --list/--manual"
+    )
+    parser.add_argument("--list", action="store_true", help="List all configured hooks")
+    parser.add_argument("--manual", metavar="HOOK_PATH", help="Run a single hook manually")
+    parser.add_argument("--skip-hooks", action="store_true", help="Skip running hooks")
 
-    agent_name = sys.argv[1]
-    second_arg = sys.argv[2]
+    args = parser.parse_args()
 
     # Handle --list flag
-    if second_arg == '--list':
-        list_hooks(agent_name)
+    if args.list:
+        list_hooks(args.agent)
         return
 
     # Handle --manual flag
-    if second_arg == '--manual':
-        if len(sys.argv) < 4:
-            print("❌ Error: --manual requires a hook path")
-            print("   Usage: python run_hooks.py <agent-name> --manual <hook-path>")
-            sys.exit(1)
+    if args.manual:
+        print(f"🔧 Running manual hook: {args.manual} for agent: {args.agent}")
+        print(f"📋 Executing: {args.manual}\n")
 
-        hook_path = sys.argv[3]
-        print(f"🔧 Running manual hook: {hook_path} for agent: {agent_name}")
-        print(f"📋 Executing: {hook_path}\n")
-
-        if run_hook_script(agent_name, hook_path):
+        if run_hook_script(args.agent, args.manual):
             print(f"\n✅ Hook completed successfully")
             sys.exit(0)
         else:
             print(f"\n❌ Hook failed")
             sys.exit(1)
 
-    # Run hooks for a stage
-    stage = second_arg
-    skip_hooks = sys.argv[3] if len(sys.argv) > 3 else "false"
+    # Run hooks for a stage (stage is required unless --list or --manual)
+    if not args.stage:
+        parser.error("stage is required unless using --list or --manual")
 
-    if run_hooks_for_stage(agent_name, stage, skip_hooks):
+    if run_hooks_for_stage(args.agent, args.stage, args.skip_hooks):
         sys.exit(0)
     else:
         sys.exit(1)

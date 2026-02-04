@@ -2,7 +2,7 @@
 # Note: Environment loading is handled by Python scripts with agent-specific support
 
 # Default target
-.PHONY: help enable-services list-agents deploy deploy-dry deploy-code-only deploy-code-only-dry delete test-build test-dockerfile create-agent-engine list-agent-engines delete-agent-engine run-hook
+.PHONY: help enable-services list-agents deploy deploy-dry deploy-code-only deploy-code-only-dry delete test-build test-dockerfile create-agent-engine list-agent-engines delete-agent-engine run-hook --skip-hooks
 
 # Extract arguments (remove target from command goals)
 ARGS = $(filter-out $@,$(MAKECMDGOALS))
@@ -42,8 +42,11 @@ endef
 # Run hook script if it exists (reusable pattern)
 # Usage: $(call run_hooks,<agent-name>,<hook_stage>)
 # Example: $(call run_hooks,my-agent,pre_deploy)
+# Checks MAKECMDGOALS for --skip-hooks flag and passes it through
+SKIP_HOOKS_FLAG = $(if $(filter --skip-hooks,$(MAKECMDGOALS)),--skip-hooks,)
+
 define run_hooks
-@python $(DEPLOYMENT_ENGINE_DIR)/utils/run_hooks.py $(1) $(2) "$(SKIP_HOOKS)"
+@python $(DEPLOYMENT_ENGINE_DIR)/utils/run_hooks.py $(1) $(2) $(SKIP_HOOKS_FLAG)
 endef
 help:
 	@echo "ADK Agents Deployment to Google Cloud Run"
@@ -75,20 +78,18 @@ help:
 	@echo "  Hooks are configured in config.yaml under the 'hooks:' section:"
 	@echo "    hooks:"
 	@echo "      pre_deploy:"
-	@echo "        - scripts/mcp-sync.sh"
-	@echo "        - scripts/validate-env.sh"
+	@echo "        - scripts/pre-deploy.sh"
 	@echo "      post_deploy:"
-	@echo "        - scripts/health-check.sh"
-	@echo "        - scripts/notify.sh"
+	@echo "        - scripts/post-deploy.sh"
 	@echo ""
-	@echo "  To skip hooks, set SKIP_HOOKS=true:"
-	@echo "    make deploy <agent> SKIP_HOOKS=true"
+	@echo "  To skip hooks, use --skip-hooks flag:"
+	@echo "    make deploy <agent> --skip-hooks"
 	@echo ""
 	@echo "Common Hook Use Cases:"
-	@echo "  - MCP operations: mcp-sync.sh, mcp-verify.sh"
+	@echo "  - MCP operations: Sync MCP config, verify connectivity"
 	@echo "  - Pre-deployment: Environment validation, dependency checks, tests"
 	@echo "  - Post-deployment: Health checks, smoke tests, notifications"
-	@echo "  - Testing: test-integration.sh, test-e2e.sh"
+	@echo "  - Testing: Integration tests, E2E tests"
 	@echo ""
 	@echo "Service Naming Examples:"
 	@echo "  make deploy my-agent          → my-agent-service"
@@ -215,7 +216,7 @@ delete-agent-engine:
 
 # Manually run a hook script (useful for testing or running hooks outside of deployment)
 # Usage: make run-hook <agent-name> <hook-path>
-# Example: make run-hook my-agent scripts/mcp-sync.sh
+# Example: make run-hook my-agent scripts/pre-deploy.sh
 # The hook path must be defined in config.yaml under hooks: section
 .PHONY: run-hook
 run-hook:
@@ -224,8 +225,8 @@ run-hook:
 	if [ -z "$$HOOK_PATH" ]; then \
 		echo "❌ Error: Provide hook path: make run-hook <agent-name> <hook-path>"; \
 		echo "💡 Examples:"; \
-		echo "   make run-hook my-agent scripts/mcp-sync.sh"; \
-		echo "   make run-hook my-agent scripts/health-check.sh"; \
+		echo "   make run-hook my-agent scripts/pre-deploy.sh"; \
+		echo "   make run-hook my-agent scripts/post-deploy.sh"; \
 		echo ""; \
 		echo "🔍 Available hooks in config.yaml:"; \
 		python $(DEPLOYMENT_ENGINE_DIR)/utils/run_hooks.py $(AGENT) --list; \
