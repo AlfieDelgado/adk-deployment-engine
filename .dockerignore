@@ -49,6 +49,9 @@ Thumbs.db
 # Claude
 .claude/
 
+# ADK local testing
+.adk/
+
 # Environment files
 **/env.local
 **/.env.*.local

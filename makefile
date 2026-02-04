@@ -2,7 +2,7 @@
 # Note: Environment loading is handled by Python scripts with agent-specific support
 
 # Default target
-.PHONY: help enable-services list-agents deploy deploy-dry deploy-code-only deploy-code-only-dry delete test-build test-dockerfile create-agent-engine list-agent-engines delete-agent-engine
+.PHONY: help enable-services list-agents deploy deploy-dry deploy-code-only deploy-code-only-dry delete test-build test-dockerfile create-agent-engine list-agent-engines delete-agent-engine run-hook
 
 # Extract arguments (remove target from command goals)
 ARGS = $(filter-out $@,$(MAKECMDGOALS))
@@ -38,6 +38,13 @@ define validate_service
 	exit 1; \
 fi
 endef
+
+# Run hook script if it exists (reusable pattern)
+# Usage: $(call run_hooks,<agent-name>,<hook_stage>)
+# Example: $(call run_hooks,my-agent,pre_deploy)
+define run_hooks
+@python $(DEPLOYMENT_ENGINE_DIR)/utils/run_hooks.py $(1) $(2) "$(SKIP_HOOKS)"
+endef
 help:
 	@echo "ADK Agents Deployment to Google Cloud Run"
 	@echo ""
@@ -61,7 +68,27 @@ help:
 	@echo "  make test-dockerfile <agent> Test Dockerfile generation"
 	@echo ""
 	@echo "Utility Commands:"
-	@echo "  make delete <agent>  Delete Cloud Run service (auto-detects service name from config.yaml)"
+	@echo "  make delete <agent> [dev|stag]  Delete Cloud Run service (auto-detects service name and environment)"
+	@echo "  make run-hook <agent> <hook-name>  Manually run a hook script defined in config.yaml"
+	@echo ""
+	@echo "Deployment Hooks (config.yaml):"
+	@echo "  Hooks are configured in config.yaml under the 'hooks:' section:"
+	@echo "    hooks:"
+	@echo "      pre_deploy:"
+	@echo "        - scripts/mcp-sync.sh"
+	@echo "        - scripts/validate-env.sh"
+	@echo "      post_deploy:"
+	@echo "        - scripts/health-check.sh"
+	@echo "        - scripts/notify.sh"
+	@echo ""
+	@echo "  To skip hooks, set SKIP_HOOKS=true:"
+	@echo "    make deploy <agent> SKIP_HOOKS=true"
+	@echo ""
+	@echo "Common Hook Use Cases:"
+	@echo "  - MCP operations: mcp-sync.sh, mcp-verify.sh"
+	@echo "  - Pre-deployment: Environment validation, dependency checks, tests"
+	@echo "  - Post-deployment: Health checks, smoke tests, notifications"
+	@echo "  - Testing: test-integration.sh, test-e2e.sh"
 	@echo ""
 	@echo "Service Naming Examples:"
 	@echo "  make deploy my-agent          → my-agent-service"
@@ -103,10 +130,12 @@ ENV_FLAG = $(if $(filter dev,$(ENV)),--dev,$(if $(filter stag,$(ENV)),--stag,))
 deploy:
 	$(call validate_agent,deploy)
 	@echo "🚀 Deploying agent: $(word 1,$(ARGS))$(if $(ENV), to $(ENV) environment)"
+	$(call run_hooks,$(word 1,$(ARGS)),pre_deploy)
 	@echo "📋 Setting up required services..."
 	$(MAKE) enable-services
 	@echo "🚀 Deploying to Cloud Run..."
 	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py --deploy $(word 1,$(ARGS)) $(ENV_FLAG)
+	$(call run_hooks,$(word 1,$(ARGS)),post_deploy)
 
 # Dry-run deployment (simulate without actually deploying)
 .PHONY: deploy-dry
@@ -120,9 +149,11 @@ deploy-dry:
 deploy-code-only:
 	$(call validate_agent,deploy-code-only)
 	@echo "🔧 Deploying code only for: $(word 1,$(ARGS))$(if $(ENV), to $(ENV) environment)"
+	$(call run_hooks,$(word 1,$(ARGS)),pre_deploy)
 	@echo "⚠️  Preserving existing environment variables and secrets (skipping --set-env-vars and --set-secrets)"
 	@echo "🚀 Deploying to Cloud Run..."
 	python $(DEPLOYMENT_ENGINE_DIR)/utils/deploy_agent.py --deploy $(word 1,$(ARGS)) --preserve-env $(ENV_FLAG)
+	$(call run_hooks,$(word 1,$(ARGS)),post_deploy)
 
 # Code-only dry-run deployment (shows gcloud command without env vars/secrets)
 .PHONY: deploy-code-only-dry
@@ -136,7 +167,8 @@ deploy-code-only-dry:
 .PHONY: delete
 delete:
 	$(call validate_agent,delete)
-	python $(DEPLOYMENT_ENGINE_DIR)/utils/makefile_helper.py delete $(AGENT)
+	@echo "🗑️  Deleting Cloud Run service for: $(word 1,$(ARGS))$(if $(ENV), from $(ENV) environment)"
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/makefile_helper.py delete $(AGENT) $(ENV_FLAG)
 
 # Test build directory structure
 .PHONY: test-build
@@ -180,3 +212,23 @@ delete-agent-engine:
 # TODO: create service account for SERVICE_ACCOUNT
 
 # TODO: create sub conda envs by agent
+
+# Manually run a hook script (useful for testing or running hooks outside of deployment)
+# Usage: make run-hook <agent-name> <hook-path>
+# Example: make run-hook my-agent scripts/mcp-sync.sh
+# The hook path must be defined in config.yaml under hooks: section
+.PHONY: run-hook
+run-hook:
+	$(call validate_agent,run-hook)
+	@HOOK_PATH=$(word 2,$(ARGS)); \
+	if [ -z "$$HOOK_PATH" ]; then \
+		echo "❌ Error: Provide hook path: make run-hook <agent-name> <hook-path>"; \
+		echo "💡 Examples:"; \
+		echo "   make run-hook my-agent scripts/mcp-sync.sh"; \
+		echo "   make run-hook my-agent scripts/health-check.sh"; \
+		echo ""; \
+		echo "🔍 Available hooks in config.yaml:"; \
+		python $(DEPLOYMENT_ENGINE_DIR)/utils/run_hooks.py $(AGENT) --list; \
+		exit 1; \
+	fi; \
+	python $(DEPLOYMENT_ENGINE_DIR)/utils/run_hooks.py $(AGENT) --manual "$$HOOK_PATH";

@@ -21,12 +21,21 @@ def get_agents_dir():
     return os.environ.get('AGENTS_DIR', 'agents')
 
 def main():
-    if len(sys.argv) != 3:
-        print("❌ Error: Usage: python makefile_helper.py delete <agent-name>")
+    if len(sys.argv) < 3:
+        print("❌ Error: Usage: python makefile_helper.py delete <agent-name> [--dev|--stag]")
         sys.exit(1)
 
     command = sys.argv[1]
     agent_name = sys.argv[2]
+
+    # Parse environment flags
+    env_flag = None
+    if len(sys.argv) > 2:
+        for arg in sys.argv[3:]:
+            if arg == '--dev':
+                env_flag = 'dev'
+            elif arg == '--stag':
+                env_flag = 'stag'
 
     if command != 'delete':
         print("❌ Error: Only 'delete' command is supported")
@@ -53,7 +62,15 @@ def main():
             if not service_name:
                 print(f"❌ Error: service_name not found in {config_path}")
                 sys.exit(1)
-            print(f"🔍 Auto-detected service name: {service_name}")
+
+            # Apply environment prefix
+            if env_flag == 'dev':
+                service_name = f"dev-{service_name}"
+            elif env_flag == 'stag':
+                service_name = f"stag-{service_name}"
+
+            env_display = f" ({env_flag} environment)" if env_flag else ""
+            print(f"🔍 Auto-detected service name: {service_name}{env_display}")
     except FileNotFoundError:
         print(f"❌ Error: Config file not found: {config_path}")
         sys.exit(1)
