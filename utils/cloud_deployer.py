@@ -7,7 +7,42 @@ integration and proper flag handling.
 import logging
 import subprocess
 import os
+import re
 from pathlib import Path
+
+
+def filter_env_var_flags(flags, preserve_env=False):
+    """Filter out flags that contain environment variable substitutions when in preserve_env mode.
+
+    In CI/CD mode (preserve_env=True), flags like --service-account=${SERVICE_ACCOUNT}
+    reference environment variables that aren't available, so they should be skipped.
+
+    Args:
+        flags: List of gcloud flags (e.g., ["--service-account=${SERVICE_ACCOUNT}", "--memory=1Gi"])
+        preserve_env: Whether to filter out env var substitutions
+
+    Returns:
+        tuple: (filtered_flags, skipped_flags) where:
+            - filtered_flags: Flags to include in deployment
+            - skipped_flags: Flags that were skipped (for logging)
+    """
+    if not preserve_env:
+        return flags, []
+
+    filtered = []
+    skipped = []
+
+    # Pattern to match ${VAR_NAME} environment variable substitutions
+    env_var_pattern = re.compile(r'\$\{[A-Z_][A-Z0-9_]*\}')
+
+    for flag in flags:
+        # Check if flag contains environment variable substitution
+        if env_var_pattern.search(flag):
+            skipped.append(flag)
+        else:
+            filtered.append(flag)
+
+    return filtered, skipped
 
 
 def execute_cloud_run_deployment(service_name, region, project_id, env_string,
@@ -56,9 +91,20 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         else:
             logging.info("ℹ️  Full deployment: No secrets configured (secrets cleared and not replaced)")
 
-    # Add additional processed flags (memory, cpu, timeout, service-account, etc.)
-    if additional_processed_flags:
-        deploy_cmd.extend(additional_processed_flags)
+    # Filter out flags with environment variable substitutions when in preserve_env mode
+    # This prevents CI/CD from failing on flags like --service-account=${SERVICE_ACCOUNT}
+    filtered_flags, skipped_flags = filter_env_var_flags(additional_processed_flags, preserve_env)
+
+    # Add filtered additional flags (memory, cpu, timeout, etc.)
+    if filtered_flags:
+        deploy_cmd.extend(filtered_flags)
+
+    # Log skipped flags in preserve mode
+    if preserve_env and skipped_flags:
+        logging.info("🔧 Preserve mode: Skipping flags with environment variable substitutions:")
+        for flag in skipped_flags:
+            logging.info(f"   ⏭️  {flag}")
+        logging.info("   These flags will use existing values from the deployed service")
 
     # Handle env vars - only set if NOT in preserve mode
     if preserve_env:
@@ -87,10 +133,17 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
                                            for secret_name, env_var_name in secret_manager_secrets])
                 formatted_cmd += f" \\\n    --set-secrets={secret_values}"
 
-        # Show additional flags
-        if additional_processed_flags:
-            for flag in additional_processed_flags:
+        # Show additional flags (filtered in preserve mode)
+        if filtered_flags:
+            for flag in filtered_flags:
                 formatted_cmd += f" \\\n    {flag}"
+
+        # Show skipped flags in dry-run output
+        if preserve_env and skipped_flags:
+            logging.info("")
+            logging.info("🔧 Preserve mode: The following flags will be skipped (contain env var substitutions):")
+            for flag in skipped_flags:
+                logging.info(f"   ⏭️  {flag}")
 
         # Show env vars (only if NOT in preserve mode)
         if not preserve_env:
