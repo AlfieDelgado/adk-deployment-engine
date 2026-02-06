@@ -76,20 +76,19 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
 
     # Handle secrets
     if preserve_env:
-        # In preserve mode, skip secrets entirely (for CI/CD)
-        logging.info("🔧 Preserve mode: Skipping secrets (keeping existing Cloud Run secrets)")
+        # In preserve mode (CI/CD), skip secrets entirely to preserve existing configuration
+        logging.info("🔧 CI/CD mode: Preserving existing secrets (no access to .env files)")
+    elif secret_manager_secrets:
+        # In full deployment mode with secrets, set configured secrets
+        # NOTE: --set-secrets replaces all existing secrets
+        secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
+                                   for secret_name, env_var_name in secret_manager_secrets])
+        deploy_cmd.append(f"--set-secrets={secret_values}")
+        logging.info(f"🔄 Full deployment: Setting {len(secret_manager_secrets)} secret(s) (replaces all existing secrets)")
     else:
-        # In full deployment mode, clear all secrets first, then set configured ones
+        # In full deployment mode without secrets, clear all existing secrets
         deploy_cmd.append("--clear-secrets")
-        logging.info("🧹 Full deployment: Clearing all existing secrets first")
-
-        if secret_manager_secrets:
-            secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
-                                       for secret_name, env_var_name in secret_manager_secrets])
-            deploy_cmd.append(f"--set-secrets={secret_values}")
-            logging.info(f"🔄 Full deployment: Setting {len(secret_manager_secrets)} secret(s)")
-        else:
-            logging.info("ℹ️  Full deployment: No secrets configured (secrets cleared and not replaced)")
+        logging.info("🧹 Full deployment: No secrets configured - clearing all existing secrets")
 
     # Filter out flags with environment variable substitutions when in preserve_env mode
     # This prevents CI/CD from failing on flags like --service-account=${SERVICE_ACCOUNT}
@@ -125,13 +124,15 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         formatted_cmd += f"\n    --project {project_id}"
 
         # Show secret flags
-        if not preserve_env:
-            # Full deployment mode - always clear first, then set if configured
+        if secret_manager_secrets and not preserve_env:
+            # Full deployment mode with secrets - show --set-secrets
+            secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
+                                       for secret_name, env_var_name in secret_manager_secrets])
+            formatted_cmd += f" \\\n    --set-secrets={secret_values}"
+        elif not secret_manager_secrets and not preserve_env:
+            # Full deployment mode without secrets - show --clear-secrets
             formatted_cmd += f" \\\n    --clear-secrets"
-            if secret_manager_secrets:
-                secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
-                                           for secret_name, env_var_name in secret_manager_secrets])
-                formatted_cmd += f" \\\n    --set-secrets={secret_values}"
+        # Note: CI/CD mode (preserve_env=True) - no flags shown (preserves existing)
 
         # Show additional flags (filtered in preserve mode)
         if filtered_flags:
