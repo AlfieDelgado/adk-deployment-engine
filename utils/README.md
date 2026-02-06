@@ -34,7 +34,10 @@ The main deployment script that handles:
 
 - **Configuration Processing**: Loads and validates per-agent `config.yaml` files
 - **Environment Management**: 3-tier priority system (global `.env` → agent `.env.secrets` → substitution)
-- **Secret Manager Integration**: Uses `--set-secrets` when configured (replaces all), `--clear-secrets` when not configured, or preserves existing in CI/CD mode (no conflicts)
+- **Secret Manager Integration**:
+  - Local deployment with secrets: `--set-secrets` (replaces all existing secrets)
+  - Local deployment without secrets: `--clear-secrets` (removes all existing secrets)
+  - CI/CD mode: Preserves existing configuration (no secret flags)
 - **Docker Build System**: Creates isolated build environments with generated Dockerfiles
 - **Cloud Run Deployment**: Executes `gcloud run deploy` with all required flags
 

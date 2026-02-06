@@ -74,16 +74,19 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         "--project", project_id,
     ]
 
-    # Handle secrets
+    # Handle secrets - pre-build secret values string for reuse in command and display
+    secret_values_str = None
+    if secret_manager_secrets:
+        secret_values_str = ",".join([f"{env_var_name}={secret_name}:latest"
+                                       for secret_name, env_var_name in secret_manager_secrets])
+
     if preserve_env:
         # In preserve mode (CI/CD), skip secrets entirely to preserve existing configuration
         logging.info("🔧 CI/CD mode: Preserving existing secrets (no access to .env files)")
     elif secret_manager_secrets:
         # In full deployment mode with secrets, set configured secrets
         # NOTE: --set-secrets replaces all existing secrets
-        secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
-                                   for secret_name, env_var_name in secret_manager_secrets])
-        deploy_cmd.append(f"--set-secrets={secret_values}")
+        deploy_cmd.append(f"--set-secrets={secret_values_str}")
         logging.info(f"🔄 Full deployment: Setting {len(secret_manager_secrets)} secret(s) (replaces all existing secrets)")
     else:
         # In full deployment mode without secrets, clear all existing secrets
@@ -126,9 +129,7 @@ def execute_cloud_run_deployment(service_name, region, project_id, env_string,
         # Show secret flags
         if secret_manager_secrets and not preserve_env:
             # Full deployment mode with secrets - show --set-secrets
-            secret_values = ",".join([f"{env_var_name}={secret_name}:latest"
-                                       for secret_name, env_var_name in secret_manager_secrets])
-            formatted_cmd += f" \\\n    --set-secrets={secret_values}"
+            formatted_cmd += f" \\\n    --set-secrets={secret_values_str}"
         elif not secret_manager_secrets and not preserve_env:
             # Full deployment mode without secrets - show --clear-secrets
             formatted_cmd += f" \\\n    --clear-secrets"
