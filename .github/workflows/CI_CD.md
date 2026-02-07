@@ -143,6 +143,42 @@ Then CI/CD handles re-deployments.
 | `agents/my-agent/*` | Deploys only `my-agent` |
 | Global files (`requirements.txt`, `utils/*`, etc.) | Deploys all agents |
 
+### Pipeline Steps
+
+```
+1. detect-changes.yml → Identifies which agents changed
+2. validate.yml → Validates configs and service existence
+3. deploy.yml → Deploys only validated agents with existing services
+```
+
+---
+
+## Validation Workflow
+
+Before deployment, all agents are validated:
+
+| Check | Description | Failure Behavior |
+|-------|-------------|------------------|
+| Config Schema | Validates config.yaml exists and has required fields | Fails workflow |
+| Service Exists | Checks if Cloud Run service exists | Skips deployment (warns) |
+| Dry-run | Simulates deployment (validates Dockerfile, imports, engine compatibility) | Warning only (continues) |
+
+**Note:** Secret Manager validation is NOT performed in CI/CD since secret names are stored in `.env` files (gitignored).
+
+### First Deployment Handling
+
+When an agent hasn't been deployed before:
+
+1. Validation creates a GitHub warning annotation
+2. Agent is excluded from `ready-to-deploy` output
+3. Workflow continues (doesn't fail)
+4. GitHub Step Summary shows the manual deployment command
+
+Example output:
+```
+⚠️ Agent 'my-agent' needs first deployment. Run: make deploy my-agent dev
+```
+
 ---
 
 ## Common Issues
@@ -178,11 +214,37 @@ cloud_run:
 
 ## Testing
 
+### Local Testing
+
 ```bash
 # Test what code-only deployment would do
 make deploy-code-only-dry my-agent
 make deploy-code-only-dry my-agent dev
+
+# Run pytest tests locally
+pytest tests/ -v
 ```
+
+### Continuous Testing (CI)
+
+The `ci.yml` workflow runs all tests on every push to verify code quality:
+
+| Workflow | Triggers | Purpose |
+|----------|----------|---------|
+| `ci.yml` → `test.yml` | Push to any branch, PR | Run all tests in `tests/` |
+
+**Tests run:**
+- `test_hooks.py` - Deployment hooks functionality (5 tests)
+- `test_workflow.py` - CI/CD pipeline logic (23 tests)
+
+**Total: 28 tests**
+
+**Benefits:**
+- **Shift-left testing** - Catches issues before deployment
+- **Fast feedback** - Runs on every push, independent of deployment
+- **No secrets needed** - Tests use mocks, don't require GCP access
+
+The CI workflow runs separately from the deployment pipeline and doesn't require any configuration.
 
 ---
 

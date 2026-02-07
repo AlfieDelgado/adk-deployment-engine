@@ -44,18 +44,32 @@ jobs:
     with:
       agents-dir: ${{ vars.AGENTS_DIR || '' }}
 
-  deploy:
+  validate:
     needs: detect
-    # Only run on merge or direct push AND when there are agents to deploy
     if: |
       vars.ENABLE_CI_CD == 'true' &&
-      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)) &&
       needs.detect.outputs.agents-to-deploy != '[]' &&
       needs.detect.outputs.agents-to-deploy != ''
-    uses: ./.github/workflows/deploy.yml
+    uses: ./.github/workflows/validate.yml
     with:
       agents-dir: ${{ vars.AGENTS_DIR || '' }}
       agents-to-deploy: ${{ needs.detect.outputs.agents-to-deploy }}
+      branch-name: ${{ github.ref_name }}
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
+  deploy:
+    needs: validate
+    # Only run on merge or direct push AND when there are agents ready to deploy
+    if: |
+      vars.ENABLE_CI_CD == 'true' &&
+      (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)) &&
+      needs.validate.outputs.ready-to-deploy != '[]' &&
+      needs.validate.outputs.ready-to-deploy != ''
+    uses: ./.github/workflows/deploy.yml
+    with:
+      agents-dir: ${{ vars.AGENTS_DIR || '' }}
+      agents-to-deploy: ${{ needs.validate.outputs.ready-to-deploy }}
       branch-name: ${{ github.ref_name }}
     secrets:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}

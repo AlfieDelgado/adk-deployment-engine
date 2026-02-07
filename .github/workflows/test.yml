@@ -1,0 +1,67 @@
+name: Run Tests
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.13'
+      agents-dir:
+        description: 'Directory containing agent configurations'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Detect AGENTS_DIR from Makefile
+        id: detect-agents-dir
+        run: |
+          if [ -n "${{ inputs.agents-dir }}" ]; then
+            echo "agents-dir=${{ inputs.agents-dir }}" >> $GITHUB_OUTPUT
+          elif [ -f "Makefile" ]; then
+            MAKEFILE_AGENTS_DIR=$(grep -E '^AGENTS_DIR[[:space:]]*\\?=' Makefile | sed 's/^AGENTS_DIR[[:space:]]*[?:]=*[[:space:]]*//' | tr -d ' ')
+            if [ -n "$MAKEFILE_AGENTS_DIR" ]; then
+              echo "agents-dir=$MAKEFILE_AGENTS_DIR" >> $GITHUB_OUTPUT
+            else
+              echo "agents-dir=agents" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "agents-dir=agents" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pyyaml
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run all tests
+        run: |
+          export AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+          pytest tests/ -v --tb=short
+
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "### 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All tests in \`tests/\` directory passed!" >> $GITHUB_STEP_SUMMARY

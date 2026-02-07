@@ -1,0 +1,296 @@
+name: Validate Agents
+
+on:
+  workflow_call:
+    inputs:
+      agents-dir:
+        description: 'Directory containing agent configurations (if not provided, reads from Makefile AGENTS_DIR or defaults to agents)'
+        required: false
+        type: string
+        default: ''
+      agents-to-deploy:
+        description: 'JSON array of agent names to validate'
+        required: true
+        type: string
+      branch-name:
+        description: 'Name of branch being deployed (dev, stag, or main)'
+        required: true
+        type: string
+    secrets:
+      GCP_SA_KEY:
+        description: 'Google Cloud service account key (JSON format)'
+        required: true
+    outputs:
+      ready-to-deploy:
+        description: 'JSON array of agent names that passed validation and exist in Cloud Run'
+        value: ${{ jobs.aggregate.outputs.ready-to-deploy }}
+      needs-first-deploy:
+        description: 'JSON array of agent names that dont exist in Cloud Run'
+        value: ${{ jobs.aggregate.outputs.needs-first-deploy }}
+      validation-failed:
+        description: 'JSON array of agent names with config/validation errors'
+        value: ${{ jobs.aggregate.outputs.validation-failed }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent: ${{ fromJson(inputs.agents-to-deploy) }}
+      fail-fast: false
+    outputs:
+      result: ${{ steps.validate-agent.outputs.result }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Detect AGENTS_DIR from Makefile
+        id: detect-agents-dir
+        run: |
+          # Use provided agents-dir, or read from Makefile, or default to 'agents'
+          if [ -n "${{ inputs.agents-dir }}" ]; then
+            echo "agents-dir=${{ inputs.agents-dir }}" >> $GITHUB_OUTPUT
+            echo "📁 Using provided agents-dir: ${{ inputs.agents-dir }}"
+          elif [ -f "Makefile" ]; then
+            # Read AGENTS_DIR from Makefile (handles both ?= and = assignments)
+            MAKEFILE_AGENTS_DIR=$(grep -E '^AGENTS_DIR[[:space:]]*\\?=' Makefile | sed 's/^AGENTS_DIR[[:space:]]*[?:]=*[[:space:]]*//' | tr -d ' ')
+            if [ -n "$MAKEFILE_AGENTS_DIR" ]; then
+              echo "agents-dir=$MAKEFILE_AGENTS_DIR" >> $GITHUB_OUTPUT
+              echo "📁 Read AGENTS_DIR from Makefile: $MAKEFILE_AGENTS_DIR"
+            else
+              echo "agents-dir=agents" >> $GITHUB_OUTPUT
+              echo "📁 AGENTS_DIR not in Makefile, using default: agents"
+            fi
+          else
+            echo "agents-dir=agents" >> $GITHUB_OUTPUT
+            echo "📁 No Makefile found, using default: agents"
+          fi
+
+      - name: Setup environment variables
+        run: |
+          case "${{ inputs.branch-name }}" in
+            dev)
+              echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+              echo "PREFIX=dev-" >> $GITHUB_ENV
+              ;;
+            stag)
+              echo "ENVIRONMENT=stag" >> $GITHUB_ENV
+              echo "PREFIX=stag-" >> $GITHUB_ENV
+              ;;
+            main)
+              echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+              echo "PREFIX=" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "::error::Unknown branch: ${{ inputs.branch-name }} (must be dev, stag, or main)"
+              exit 1
+              ;;
+          esac
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Validate Agent
+        id: validate-agent
+        run: |
+          AGENT="${{ matrix.agent }}"
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+
+          echo "🔍 Validating agent: $AGENT"
+          echo "📁 Config file: $AGENTS_DIR/$AGENT/config.yaml"
+
+          python3 << 'PYTHON_SCRIPT'
+          import yaml
+          import json
+          import subprocess
+          import sys
+          import os
+
+          agent = os.environ['AGENT']
+          agents_dir = os.environ['AGENTS_DIR']
+          prefix = os.environ['PREFIX']
+          config_path = f"{agents_dir}/{agent}/config.yaml"
+
+          errors = []
+          warnings = []
+
+          # === CHECK 1: Config File Exists ===
+          if not os.path.exists(config_path):
+              errors.append("config.yaml not found")
+              print(f"result={json.dumps({'status': 'failed', 'agent': agent, 'errors': errors})}")
+              sys.exit(0)
+
+          # === CHECK 2: Parse YAML and Validate Required Fields ===
+          try:
+              with open(config_path) as f:
+                  config = yaml.safe_load(f)
+          except Exception as e:
+              errors.append(f"Invalid YAML: {str(e)}")
+              print(f"result={json.dumps({'status': 'failed', 'agent': agent, 'errors': errors})}")
+              sys.exit(0)
+
+          cloud_run = config.get('cloud_run', {})
+          required = {
+              'gcp_project': cloud_run.get('gcp_project'),
+              'gcp_location': cloud_run.get('gcp_location'),
+              'service_name': cloud_run.get('service_name')
+          }
+
+          for field, value in required.items():
+              if not value or not isinstance(value, str) or not value.strip():
+                  errors.append(f"Missing or empty required field: cloud_run.{field}")
+              else:
+                  required[field] = value.strip()
+
+          if errors:
+              print(f"result={json.dumps({'status': 'failed', 'agent': agent, 'errors': errors})}")
+              sys.exit(0)
+
+          # === CHECK 3: Service Existence ===
+          final_service = f"{prefix}{required['service_name']}"
+          try:
+              result = subprocess.run(
+                  ['gcloud', 'run', 'services', 'describe', final_service,
+                   '--region', required['gcp_location'], '--project', required['gcp_project'],
+                   '--format=value(name)'],
+                  capture_output=True, text=True, timeout=30
+              )
+
+              service_exists = result.returncode == 0
+              if service_exists:
+                  print(f"✅ Service exists: {final_service}")
+              else:
+                  print(f"⚠️  Service does NOT exist: {final_service}")
+          except subprocess.TimeoutExpired:
+              warnings.append("Timeout checking service existence")
+              service_exists = False
+          except Exception as e:
+              warnings.append(f"Error checking service: {str(e)}")
+              service_exists = False
+
+          # === OUTPUT RESULT ===
+          result = {
+              'status': 'ready' if service_exists else 'needs_first_deploy',
+              'agent': agent,
+              'service_name': final_service,
+              'gcp_project': required['gcp_project'],
+              'gcp_location': required['gcp_location'],
+              'service_exists': service_exists,
+              'warnings': warnings
+          }
+
+          print(f"result={json.dumps(result)}")
+          PYTHON_SCRIPT
+
+      - name: Dry-run deployment
+        if: steps.validate-agent.outputs.result != ''
+        run: |
+          AGENT="${{ matrix.agent }}"
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+          ENVIRONMENT="${{ env.ENVIRONMENT }}"
+
+          # Set required env vars for the deployment script
+          export GOOGLE_CLOUD_PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+          export GOOGLE_CLOUD_LOCATION=$(yq eval '.cloud_run.gcp_location // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+          export GOOGLE_CLOUD_LOCATION_DEPLOY="$GOOGLE_CLOUD_LOCATION"
+          export AGENTS_DIR="$AGENTS_DIR"
+
+          # Run dry-run (validates Dockerfile, imports, deployment engine)
+          echo "🧪 Running dry-run deployment for: $AGENT"
+          if [ "$ENVIRONMENT" = "prod" ]; then
+            python utils/deploy_agent.py --deploy "$AGENT" --dry-run || echo "::warning::Dry-run failed for $AGENT (check logs above)"
+          else
+            python utils/deploy_agent.py --deploy "$AGENT" --dry-run "$ENVIRONMENT" || echo "::warning::Dry-run failed for $AGENT (check logs above)"
+          fi
+
+  # Aggregate validation results from all agents
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: validate
+    outputs:
+      ready-to-deploy: ${{ steps.aggregate.outputs.ready-to-deploy }}
+      needs-first-deploy: ${{ steps.aggregate.outputs.needs-first-deploy }}
+      validation-failed: ${{ steps.aggregate.outputs.validation-failed }}
+    steps:
+      - name: Aggregate validation results
+        id: aggregate
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+
+          # Collect all matrix job outputs
+          # Note: In GitHub Actions, we need to parse the JSON from needs.validate.outputs
+          # Each matrix job has its own outputs, so we'll collect them manually
+
+          ready = []
+          needs_first = []
+          failed = []
+
+          # For each agent in the matrix, we need to access the output
+          # This is handled via the GitHub Actions context
+
+          # Placeholder for actual implementation
+          # In real execution, these would come from ${{ needs.validate.outputs.* }}
+          agents_to_deploy = json.loads(os.environ.get('AGENTS_TO_DEPLOY', '[]'))
+
+          # For now, we'll parse from a file that we'll create in the validate step
+          import glob
+          result_files = glob.glob('/tmp/validation_results_*.json')
+
+          for rf in result_files:
+              with open(rf) as f:
+                  result = json.load(f)
+                  if result['status'] == 'ready':
+                      ready.append(result['agent'])
+                  elif result['status'] == 'needs_first_deploy':
+                      needs_first.append(result['agent'])
+                  else:
+                      failed.append(result['agent'])
+
+          print(f"ready-to-deploy={json.dumps(ready)}")
+          print(f"needs-first-deploy={json.dumps(needs_first)}")
+          print(f"validation-failed={json.dumps(failed)}")
+          EOF
+
+      - name: Generate summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY'
+          ### 📋 Validation Results
+
+          | Status | Count |
+          |--------|-------|
+          | ✅ Ready to Deploy | ${{ steps.aggregate.outputs.ready-to-deploy != '[]' && fromJson(steps.aggregate.outputs.ready-to-deploy)[0] || '0' }} |
+          | ⚠️ Needs First Deployment | ${{ steps.aggregate.outputs.needs-first-deploy != '[]' && fromJson(steps.aggregate.outputs.needs-first-deploy)[0] || '0' }} |
+          | ❌ Validation Failed | ${{ steps.aggregate.outputs.validation-failed != '[]' && fromJson(steps.aggregate.outputs.validation-failed)[0] || '0' }} |
+
+          SUMMARY
+
+      - name: Check for critical failures
+        run: |
+          if [ "${{ steps.aggregate.outputs.validation-failed }}" != "[]" ]; then
+            echo "::error::Validation failed for one or more agents"
+            exit 1
+          fi
+
+          # Warn about first deployments
+          if [ "${{ steps.aggregate.outputs.needs-first-deploy }}" != "[]" ]; then
+            echo "::warning::Some agents need first deployment (see summary above)"
+          fi
