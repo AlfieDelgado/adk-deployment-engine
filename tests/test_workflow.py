@@ -7,8 +7,10 @@ This tests the workflow logic locally without needing real GCP resources.
 """
 
 import os
+import subprocess
 import tempfile
 import shutil
+import json
 from pathlib import Path
 from typing import List, Dict
 from dataclasses import dataclass
@@ -468,3 +470,176 @@ class TestQuickstartAgent:
         )
         assert result.status == 'needs_first_deploy'
         assert result.service_name == 'quickstart-agent'
+
+
+# ============================================================================
+# Test: Shell Script Logic
+# ============================================================================
+
+class TestShellLogic:
+    """Test shell script logic from workflows (actual command execution)."""
+
+    def test_jq_parse_json_array(self):
+        """Test that jq can parse JSON arrays correctly."""
+        # Test with single agent
+        result = subprocess.run(
+            ["jq", "-r", ".[]"],
+            input='["quickstart"]',
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "quickstart"
+
+        # Test with multiple agents
+        result = subprocess.run(
+            ["jq", "-r", ".[]"],
+            input='["agent1", "agent2", "agent3"]',
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        agents = result.stdout.strip().split("\n")
+        assert agents == ["agent1", "agent2", "agent3"]
+
+        # Test with empty array
+        result = subprocess.run(
+            ["jq", "-r", ".[]"],
+            input="[]",
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""
+
+    def test_jq_with_echo_single_quotes(self):
+        """Test echo with single quotes around JSON (workflow fix)."""
+        # This is the correct way - single quotes protect the JSON
+        result = subprocess.run(
+            "echo '[\"quickstart\"]' | jq -r '.[]'",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "quickstart"
+
+    def test_jq_with_echo_double_quotes_fails(self):
+        """Test that double quotes around JSON breaks jq (the bug)."""
+        # The actual bug: when GitHub Actions expands the input, it loses proper quoting
+        # Simulating what happens with the broken workflow pattern
+        result = subprocess.run(
+            'echo "[\"quickstart\"]" | jq -r ".[]" 2>&1 || true',
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        # This should fail with parse error
+        assert "parse error" in result.stdout
+
+    @pytest.mark.skipif(not shutil.which("yq"), reason="yq not installed locally")
+    def test_yq_extract_from_yaml(self):
+        """Test yq extracting values from YAML config."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "config.yaml"
+            config_file.write_text("""
+description: Test agent
+cloud_run:
+  service_name: quickstart-agent
+  gcp_project: my-project
+  gcp_location: us-central1
+""")
+
+            # Test extracting a single value
+            result = subprocess.run(
+                ["yq", "eval", ".cloud_run.gcp_project", str(config_file)],
+                capture_output=True,
+                text=True
+            )
+            assert result.returncode == 0
+            assert result.stdout.strip() == "my-project"
+
+            # Test with default value
+            result = subprocess.run(
+                ["yq", "eval", ".cloud_run.nonexistent // \"default\"", str(config_file)],
+                capture_output=True,
+                text=True
+            )
+            assert result.returncode == 0
+            assert result.stdout.strip() == "default"
+
+    @pytest.mark.skipif(not shutil.which("yq"), reason="yq not installed locally")
+    def test_yq_extract_empty_string(self):
+        """Test that yq returns empty string for missing fields without default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "config.yaml"
+            config_file.write_text("description: Test\n")
+
+            result = subprocess.run(
+                ["yq", "eval", ".cloud_run.gcp_project // \"\"", str(config_file)],
+                capture_output=True,
+                text=True
+            )
+            assert result.returncode == 0
+            assert result.stdout.strip() == ""
+
+    def test_bash_array_operations(self):
+        """Test bash array operations used in workflows."""
+        result = subprocess.run(
+            """
+            ready=()
+            ready+=("agent1")
+            ready+=("agent2")
+            printf '%s\\n' "${ready[@]}" | jq -R . | jq -s .
+            """,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert json.loads(result.stdout) == ["agent1", "agent2"]
+
+    def test_bash_empty_array(self):
+        """Test bash empty array handling."""
+        result = subprocess.run(
+            """
+            ready=()
+            if [ ${#ready[@]} -eq 0 ]; then
+                echo "[]"
+            else
+                printf '%s\\n' "${ready[@]}" | jq -R . | jq -s .
+            fi
+            """,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "[]"
+
+    def test_github_env_pattern(self):
+        """Test the $GITHUB_ENV pattern used in workflows."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "env.txt"
+
+            # Simulate writing to GITHUB_ENV
+            subprocess.run(
+                f'echo "ENVIRONMENT=dev" >> {env_file}',
+                shell=True
+            )
+            subprocess.run(
+                f'echo "PREFIX=dev-" >> {env_file}',
+                shell=True
+            )
+
+            # Read back
+            result = subprocess.run(
+                f"cat {env_file}",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            assert result.returncode == 0
+            lines = result.stdout.strip().split("\n")
+            assert "ENVIRONMENT=dev" in lines
+            assert "PREFIX=dev-" in lines

@@ -104,7 +104,7 @@ jobs:
           ready=()
           needs_first=()
 
-          for AGENT in $(echo "${{ inputs.agents-to-deploy }}" | jq -r '.[]'); do
+          for AGENT in $(echo '${{ inputs.agents-to-deploy }}' | jq -r '.[]'); do
             echo "🔍 Validating agent: $AGENT"
             CONFIG_FILE="$AGENTS_DIR/$AGENT/config.yaml"
 
@@ -165,7 +165,7 @@ jobs:
         run: |
           AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
 
-          for AGENT in $(echo "${{ inputs.agents-to-deploy }}" | jq -r '.[]'); do
+          for AGENT in $(echo '${{ inputs.agents-to-deploy }}' | jq -r '.[]'); do
             echo "🧪 Running dry-run deployment for: $AGENT"
 
             export GOOGLE_CLOUD_PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
