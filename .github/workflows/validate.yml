@@ -96,6 +96,37 @@ jobs:
               ;;
           esac
 
+      - name: Dry-run deployment
+        id: dryrun
+        run: |
+          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
+
+          dryrun_passed=()
+          dryrun_failed=()
+
+          for AGENT in $(echo '${{ inputs.agents-to-deploy }}' | jq -r '.[]'); do
+            echo "🧪 Running dry-run deployment for: $AGENT"
+
+            export GOOGLE_CLOUD_PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+            export GOOGLE_CLOUD_LOCATION=$(yq eval '.cloud_run.gcp_location // ""' "$AGENTS_DIR/$AGENT/config.yaml")
+            export GOOGLE_CLOUD_LOCATION_DEPLOY="$GOOGLE_CLOUD_LOCATION"
+            export AGENTS_DIR="$AGENTS_DIR"
+
+            if make deploy-dry $AGENT $ENVIRONMENT; then
+              echo "✅ Dry-run successful for: $AGENT"
+              dryrun_passed+=("$AGENT")
+            else
+              echo "::warning::Dry-run failed for $AGENT (check logs above)"
+              dryrun_failed+=("$AGENT")
+            fi
+          done
+
+          # Output results for summary
+          {
+            echo "dryrun_passed=$(printf '%s\n' "${dryrun_passed[@]}" | jq -R . | jq -s -c . 2>/dev/null || echo '[]')"
+            echo "dryrun_failed=$(printf '%s\n' "${dryrun_failed[@]}" | jq -R . | jq -s -c . 2>/dev/null || echo '[]')"
+          } >> $GITHUB_OUTPUT
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -168,29 +199,23 @@ jobs:
             echo "needs-first-deploy=${NEEDS_JSON}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Dry-run deployment
-        run: |
-          AGENTS_DIR="${{ steps.detect-agents-dir.outputs.agents-dir }}"
-
-          for AGENT in $(echo '${{ inputs.agents-to-deploy }}' | jq -r '.[]'); do
-            echo "🧪 Running dry-run deployment for: $AGENT"
-
-            export GOOGLE_CLOUD_PROJECT=$(yq eval '.cloud_run.gcp_project // ""' "$AGENTS_DIR/$AGENT/config.yaml")
-            export GOOGLE_CLOUD_LOCATION=$(yq eval '.cloud_run.gcp_location // ""' "$AGENTS_DIR/$AGENT/config.yaml")
-            export GOOGLE_CLOUD_LOCATION_DEPLOY="$GOOGLE_CLOUD_LOCATION"
-            export AGENTS_DIR="$AGENTS_DIR"
-
-            make deploy-dry $AGENT $ENVIRONMENT || echo "::warning::Dry-run failed for $AGENT (check logs above)"
-          done
-
       - name: Generate summary
         run: |
           cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY'
-          ### 📋 Validation Results
+          ### 🧪 Dry-run Results
 
           | Status | Agents |
           |--------|--------|
-          | ✅ Ready to Deploy | ${{ steps.validate.outputs.ready-to-deploy }} |
+          | ✅ Passed | ${{ steps.dryrun.outputs.dryrun_passed }} |
+          | ❌ Failed | ${{ steps.dryrun.outputs.dryrun_failed }} |
+
+          ---
+
+          ### 📋 Cloud Run Service Check
+
+          | Status | Agents |
+          |--------|--------|
           | ⚠️ Needs First Deployment | ${{ steps.validate.outputs.needs-first-deploy }} |
+          | ✅ Ready to Deploy | ${{ steps.validate.outputs.ready-to-deploy }} |
 
           SUMMARY
