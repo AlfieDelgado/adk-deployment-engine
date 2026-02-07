@@ -152,13 +152,15 @@ jobs:
           if [ ${#ready[@]} -eq 0 ]; then
             echo "ready-to-deploy=[]" >> $GITHUB_OUTPUT
           else
-            echo "ready-to-deploy=$(printf '%s\n' "${ready[@]}" | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
+            READY_JSON=$(printf '%s\n' "${ready[@]}" | jq -R . | jq -s -c .)
+            echo "ready-to-deploy=${READY_JSON}" >> $GITHUB_OUTPUT
           fi
 
           if [ ${#needs_first[@]} -eq 0 ]; then
             echo "needs-first-deploy=[]" >> $GITHUB_OUTPUT
           else
-            echo "needs-first-deploy=$(printf '%s\n' "${needs_first[@]}" | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
+            NEEDS_JSON=$(printf '%s\n' "${needs_first[@]}" | jq -R . | jq -s -c .)
+            echo "needs-first-deploy=${NEEDS_JSON}" >> $GITHUB_OUTPUT
           fi
 
       - name: Dry-run deployment

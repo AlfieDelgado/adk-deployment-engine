@@ -586,13 +586,14 @@ cloud_run:
     def test_bash_array_operations(self):
         """Test bash array operations used in workflows."""
         result = subprocess.run(
-            """
+            ["bash", "-c",
+             """
             ready=()
             ready+=("agent1")
             ready+=("agent2")
             printf '%s\\n' "${ready[@]}" | jq -R . | jq -s .
-            """,
-            shell=True,
+            """
+            ],
             capture_output=True,
             text=True
         )
@@ -602,15 +603,16 @@ cloud_run:
     def test_bash_empty_array(self):
         """Test bash empty array handling."""
         result = subprocess.run(
-            """
+            ["bash", "-c",
+             """
             ready=()
             if [ ${#ready[@]} -eq 0 ]; then
                 echo "[]"
             else
                 printf '%s\\n' "${ready[@]}" | jq -R . | jq -s .
             fi
-            """,
-            shell=True,
+            """
+            ],
             capture_output=True,
             text=True
         )
@@ -643,3 +645,38 @@ cloud_run:
             lines = result.stdout.strip().split("\n")
             assert "ENVIRONMENT=dev" in lines
             assert "PREFIX=dev-" in lines
+
+    def test_github_output_json_format(self):
+        """Test GITHUB_OUTPUT format with JSON arrays (the bug)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_file = Path(tmpdir) / "output.txt"
+
+            # Simulate what validate.yml does - build array and write to output
+            result = subprocess.run(
+                ["bash", "-c", """
+                ready=("agent1" "agent2")
+                READY_JSON=$(printf '%s\\n' "${ready[@]}" | jq -R . | jq -s -c .)
+                echo "ready-to-deploy=${READY_JSON}"
+                """],
+                capture_output=True,
+                text=True
+            )
+            assert result.returncode == 0
+
+            # Check format: name=value with no extra whitespace
+            output_line = result.stdout.strip()
+            assert output_line.startswith("ready-to-deploy=")
+            json_value = output_line.split("=", 1)[1]
+
+            # Verify it's valid JSON
+            parsed = json.loads(json_value)
+            assert parsed == ["agent1", "agent2"]
+
+            # Test writing to file (like GITHUB_OUTPUT)
+            with open(output_file, "w") as f:
+                f.write(output_line + "\n")
+
+            # Read back and verify format is preserved
+            with open(output_file) as f:
+                content = f.read().strip()
+            assert content == output_line
