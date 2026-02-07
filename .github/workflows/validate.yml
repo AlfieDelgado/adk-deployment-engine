@@ -180,11 +180,7 @@ jobs:
             export GOOGLE_CLOUD_LOCATION_DEPLOY="$GOOGLE_CLOUD_LOCATION"
             export AGENTS_DIR="$AGENTS_DIR"
 
-            if [ "$ENVIRONMENT" = "prod" ]; then
-              python utils/deploy_agent.py --deploy "$AGENT" --dry-run || echo "::warning::Dry-run failed for $AGENT (check logs above)"
-            else
-              python utils/deploy_agent.py --deploy "$AGENT" --dry-run "$ENVIRONMENT" || echo "::warning::Dry-run failed for $AGENT (check logs above)"
-            fi
+            make deploy-dry $AGENT $ENVIRONMENT || echo "::warning::Dry-run failed for $AGENT (check logs above)"
           done
 
       - name: Generate summary
