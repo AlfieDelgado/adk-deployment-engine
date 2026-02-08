@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Next Steps: workflow status badge, improved error messages, deployment URL in summary
 
+## [0.4.0] - 2026-02-08
+
+### Added
+- **GitHub Actions CI/CD Validation**: Continuous testing workflow that validates changes before deployment
+  - `validate.yml`: Comprehensive validation including dry-run deployments, shell tests, and Python tests
+  - Automatic change detection between base and head commits
+  - Validates agent configuration and Dockerfile generation
+  - Tests deployment scripts with dry-run mode
+- **Dry-run results tracking**: Improved output and result tracking for deployment dry-runs
+- **Shell testing framework**: Added tests for validate workflow shell scripts
+
+### Changed
+- Reordered validate.yml workflow steps for better logical flow
+- Use `make deploy-dry` instead of direct Python calls for consistency
+- Install requirements.txt in validate.yml for Python test dependencies
+
+### Fixed
+- validate.yml GITHUB_OUTPUT format for proper GitHub Actions integration
+- jq quoting issues in validate workflow
+- Skip flags with env var substitutions in CI/CD preserve mode (from 0.3.0)
+
 ## [0.3.0] - 2025-01-27
 
 ### Added
@@ -63,7 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Environment-specific deployments**: dev, stag, prod with service prefixes
 - **Comprehensive examples**: quickstart, minimal, persistent-session agents
 
-[Unreleased]: https://github.com/AlfieDelgado/adk-deployment-engine/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/AlfieDelgado/adk-deployment-engine/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/AlfieDelgado/adk-deployment-engine/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AlfieDelgado/adk-deployment-engine/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/AlfieDelgado/adk-deployment-engine/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AlfieDelgado/adk-deployment-engine/compare/v0.2.0...v0.2.1
