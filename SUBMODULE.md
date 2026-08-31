@@ -62,9 +62,10 @@ GOOGLE_CLOUD_PROJECT="your-project-id"
 GOOGLE_CLOUD_LOCATION="us-central1"
 
 # API Configuration (choose one):
-# Option 1: Vertex AI mode (set GOOGLE_GENAI_USE_VERTEXAI=true)
-# Option 2: Gemini Developer API mode (set GOOGLE_GENAI_USE_VERTEXAI=false and provide GOOGLE_API_KEY)
-GOOGLE_GENAI_USE_VERTEXAI="false"
+# Option 1: Enterprise auth mode (set GOOGLE_GENAI_USE_ENTERPRISE=true)
+# Option 2: Gemini Developer API mode (set GOOGLE_GENAI_USE_ENTERPRISE=false and provide GOOGLE_API_KEY)
+# Note: GOOGLE_GENAI_USE_VERTEXAI is a deprecated alias that is still honored as a fallback
+GOOGLE_GENAI_USE_ENTERPRISE="false"
 GOOGLE_API_KEY="your-api-key-here"
 ```
 
@@ -93,7 +94,7 @@ EOF
 
 # Create requirements.txt with shared utilities
 cat > agents/my-agent/requirements.txt << EOF
-google-adk
+google-adk==2.8.0
 adk-shared @ git+https://github.com/AlfieDelgado/adk-deployment-engine.git@main#subdirectory=shared
 EOF
 

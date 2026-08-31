@@ -12,7 +12,15 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 # Get the directory where main.py is located
 AGENTS_DIR = Path(__file__).parent
 # Session service uri (use GOOGLE_CLOUD_LOCATION_DEPLOY for GCP resource location)
-if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() == "true":
+# Enterprise auth mode: GOOGLE_GENAI_USE_ENTERPRISE is primary; GOOGLE_GENAI_USE_VERTEXAI is a legacy fallback
+if "GOOGLE_GENAI_USE_ENTERPRISE" in os.environ:
+    enterprise_mode = os.environ["GOOGLE_GENAI_USE_ENTERPRISE"].lower() == "true"
+else:
+    legacy_mode = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "")
+    if legacy_mode:
+        logging.warning("GOOGLE_GENAI_USE_VERTEXAI is deprecated; set GOOGLE_GENAI_USE_ENTERPRISE instead (legacy variable is still honored)")
+    enterprise_mode = legacy_mode.lower() == "true"
+if os.getenv("AGENT_ENGINE_ID") and enterprise_mode:
     deploy_location = os.getenv("GOOGLE_CLOUD_LOCATION_DEPLOY") or os.getenv("GOOGLE_CLOUD_LOCATION", "")
     SESSION_SERVICE_URI = (
         f"agentengine://projects/{os.getenv('GOOGLE_CLOUD_PROJECT', '')}"
@@ -23,10 +31,10 @@ if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "fals
     logging.info(f"Agent Engine location: {deploy_location}")
 else:
     SESSION_SERVICE_URI = "sqlite:///./sessions.db"
-    if os.getenv("AGENT_ENGINE_ID") and os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() != "true":
-        logging.warning("AGENT_ENGINE_ID is set but GOOGLE_GENAI_USE_VERTEXAI=false")
+    if os.getenv("AGENT_ENGINE_ID") and not enterprise_mode:
+        logging.warning("AGENT_ENGINE_ID is set but GOOGLE_GENAI_USE_ENTERPRISE!=true")
         logging.warning("Using SQLite sessions (ephemeral on Cloud Run).")
-        logging.warning("Set GOOGLE_GENAI_USE_VERTEXAI=true to use Vertex AI Agent Engine for persistent sessions.")
+        logging.warning("Set GOOGLE_GENAI_USE_ENTERPRISE=true to use Vertex AI Agent Engine for persistent sessions.")
 # Persistent artifacts GS bucket
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET")
 # Allowed origins for CORS

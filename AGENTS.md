@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Project Overview
 
@@ -188,8 +188,8 @@ Users create a caller workflow (see `.github/workflows/CI_CD.md`) that:
 - `GOOGLE_CLOUD_PROJECT` - Google Cloud project ID (required)
 - `GOOGLE_CLOUD_LOCATION` - Default GCP region (required)
 - `GOOGLE_CLOUD_LOCATION_DEPLOY` - Deployment region (optional, falls back to `GOOGLE_CLOUD_LOCATION`)
-- `GOOGLE_GENAI_USE_VERTEXAI` - Auth mode: `true` for Vertex AI, `false` for Gemini API
-- `GOOGLE_API_KEY` - API key (when `GOOGLE_GENAI_USE_VERTEXAI=false`)
+- `GOOGLE_GENAI_USE_ENTERPRISE` - Auth mode: `true` for enterprise (Vertex AI), `false` for Gemini API (legacy alias `GOOGLE_GENAI_USE_VERTEXAI` still honored as fallback)
+- `GOOGLE_API_KEY` - API key (used when enterprise mode is false)
 - `ARTIFACT_BUCKET` - GCS bucket for artifacts (optional)
 
 ### Agent-Specific (.env.secrets)

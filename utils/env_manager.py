@@ -227,16 +227,25 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
     additional_flags = cloud_run_config.get("additional_flags", [])
     secret_manager_secrets, referenced_vars, secret_manager_env_vars, additional_processed_flags = process_secret_manager_config(additional_flags)
 
-    # Check API configuration and enforce mutual exclusivity (ADK 1.22.1+)
-    use_vertexai = (env_vars.get("GOOGLE_GENAI_USE_VERTEXAI") or get_env_var("GOOGLE_GENAI_USE_VERTEXAI", "false")).lower() == "true"
+    # Check API configuration and enforce mutual exclusivity (ADK 2.8+ enterprise auth mode)
+    # GOOGLE_GENAI_USE_ENTERPRISE is primary; GOOGLE_GENAI_USE_VERTEXAI is a deprecated-but-honored fallback
+    enterprise_value = env_vars.get("GOOGLE_GENAI_USE_ENTERPRISE") or get_env_var("GOOGLE_GENAI_USE_ENTERPRISE")
+    if enterprise_value is None:
+        legacy_value = env_vars.get("GOOGLE_GENAI_USE_VERTEXAI") or get_env_var("GOOGLE_GENAI_USE_VERTEXAI")
+        if legacy_value:
+            logging.warning("⚠️  GOOGLE_GENAI_USE_VERTEXAI is deprecated; set GOOGLE_GENAI_USE_ENTERPRISE instead (legacy variable is still honored)")
+            enterprise_value = legacy_value
+        else:
+            enterprise_value = "false"
+    use_enterprise = enterprise_value.lower() == "true"
 
     # Track which variables should be excluded based on auth mode
     excluded_by_auth_mode = set()
 
-    if use_vertexai:
+    if use_enterprise:
         # Vertex AI mode: GOOGLE_API_KEY must NOT be deployed
         excluded_by_auth_mode.add("GOOGLE_API_KEY")
-        logging.info("✅ Vertex AI mode: GOOGLE_API_KEY will be excluded from deployment")
+        logging.info("✅ Enterprise auth mode (Vertex AI): GOOGLE_API_KEY will be excluded from deployment")
     else:
         # Gemini Developer API mode: Only GOOGLE_API_KEY needed
         # (GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION kept for session service)
@@ -259,7 +268,7 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
     # Define excluded variables (handled elsewhere)
     # Add GOOGLE_CLOUD_PROJECT to prevent duplicates from .env files
     # Note: GOOGLE_CLOUD_LOCATION and GOOGLE_CLOUD_LOCATION_DEPLOY are loaded from env files
-    global_env_vars = ["GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT"]
+    global_env_vars = ["GOOGLE_GENAI_USE_ENTERPRISE", "GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT"]
     excluded_vars = secret_manager_env_vars | substituted_vars | secret_referenced_vars | set(referenced_vars)
     has_api_key = False
 
@@ -286,15 +295,15 @@ def setup_environment_variables(project_id, region, agent_name, cloud_run_config
 
     # Log API configuration status
     logging.info("🤖 API Configuration:")
-    if use_vertexai:
-        logging.info(f"✅ Using Vertex AI (project: {project_id}, region: {region})")
+    if use_enterprise:
+        logging.info(f"✅ Using enterprise auth / Vertex AI (project: {project_id}, region: {region})")
     elif "GOOGLE_API_KEY" in secret_manager_env_vars:
         logging.info("✅ Using Google AI API (with API key from Secret Manager)")
     elif has_api_key:
         logging.info("✅ Using Google AI API (with API key from .env)")
     else:
         logging.error("Missing API configuration!")
-        logging.info("  - Either set GOOGLE_GENAI_USE_VERTEXAI=true in .env")
+        logging.info("  - Either set GOOGLE_GENAI_USE_ENTERPRISE=true in .env")
         logging.info("  - Or add GOOGLE_API_KEY to .env")
         logging.info(f"  - Or add GOOGLE_API_KEY to agents/{agent_name}/.env.secrets")
         logging.info("  - Or configure Secret Manager in config.yaml")
